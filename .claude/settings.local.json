@@ -8,7 +8,13 @@
       "Bash(npx shadcn@latest add chart --yes)",
       "Bash(cat:*)",
       "WebSearch",
-      "WebFetch(domain:explorer.aptoslabs.com)"
+      "WebFetch(domain:explorer.aptoslabs.com)",
+      "Bash(find:*)",
+      "Bash(tree:*)",
+      "WebFetch(domain:docs.hyperion.xyz)",
+      "Bash(bun install:*)",
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []

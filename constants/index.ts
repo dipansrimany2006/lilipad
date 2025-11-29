@@ -10,6 +10,11 @@ export const sidebarLinks = [
     icon: "Rocket",
   },
   {
+    name: "Trade",
+    href: "/trade",
+    icon: "ArrowLeftRight",
+  },
+  {
     name:"Tokens",
     href:"/tokens",
     icon:"CirclePoundSterling",

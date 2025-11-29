@@ -69,7 +69,16 @@ export default function Tokens() {
       try {
         const stored = localStorage.getItem("lilipad_created_tokens");
         if (stored) {
-          const allTokens: StoredToken[] = JSON.parse(stored);
+          let allTokens: StoredToken[];
+          try {
+            allTokens = JSON.parse(stored);
+          } catch {
+            // Invalid JSON in localStorage, clear it
+            console.error("Invalid JSON in lilipad_created_tokens, clearing storage");
+            localStorage.removeItem("lilipad_created_tokens");
+            setTokens([]);
+            return;
+          }
           // Filter tokens by current wallet address if connected
           if (account?.address) {
             const walletAddress = account.address.toString();
