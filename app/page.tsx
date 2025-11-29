@@ -119,9 +119,9 @@ export default function Home() {
                   <>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {filteredProjects.map((project) => (
+                        <Link key={project.id} href={`/project/${project.id}`}>
                         <MagicCard
-                          key={project.id}
-                          className="p-4 cursor-pointer rounded-2xl"
+                          className="p-4 cursor-pointer rounded-2xl hover:scale-[1.02] transition-transform"
                           gradientSize={200}
                           gradientFrom="#d4f6d3"
                           gradientTo="#0b1418"
@@ -237,6 +237,7 @@ export default function Home() {
                             </div>
                           </div>
                         </MagicCard>
+                        </Link>
                       ))}
                     </div>
 
