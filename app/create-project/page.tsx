@@ -75,7 +75,7 @@ export default function CreateProject() {
           <main className="flex-1 overflow-auto p-4">
             <SidebarTrigger className="mb-4" />
 
-            <section className="px-4 max-w-4xl mx-auto">
+            <section className="px-4 max-w-4xl mx-auto pb-8">
               {/* Header */}
               <div className="flex items-center gap-4 mb-8">
                 <Link

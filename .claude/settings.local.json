@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:raw.githubusercontent.com)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "Bash(bun run build:*)",
+      "Bash(bunx shadcn@latest add chart:*)",
+      "Bash(npx shadcn@latest add chart --yes)"
     ],
     "deny": [],
     "ask": []

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import Navbar from "@/components/navbar";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -22,6 +23,8 @@ import {
   TrendingUp,
   ChevronDown,
   Coins,
+  ChevronRight,
+  BarChart3,
 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -52,6 +55,7 @@ interface StoredLock {
 }
 
 export default function Locks() {
+  const router = useRouter();
   const { account, signAndSubmitTransaction, connected } = useWallet();
   const [showModal, setShowModal] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -356,7 +360,7 @@ export default function Locks() {
           <main className="flex-1 overflow-auto p-4">
             <SidebarTrigger className="mb-4" />
 
-            <section className="px-4 max-w-4xl mx-auto">
+            <section className="px-4 max-w-4xl mx-auto pb-8">
               {/* Header */}
               <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">
@@ -691,12 +695,15 @@ export default function Locks() {
                       {locks.map((lock) => (
                         <MagicCard
                           key={lock.id}
-                          className="p-6 rounded-2xl"
+                          className="p-6 rounded-2xl cursor-pointer hover:border-[#D4F6D3]/50 transition-all group"
                           gradientSize={200}
                           gradientFrom="#d4f6d3"
                           gradientTo="#0b1418"
                         >
-                          <div className="flex items-start justify-between">
+                          <div
+                            className="flex items-start justify-between"
+                            onClick={() => router.push(`/locks/${encodeURIComponent(lock.id)}`)}
+                          >
                             <div className="flex items-center gap-4">
                               <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
                                 lock.withdrawn
@@ -733,7 +740,10 @@ export default function Locks() {
                             <div className="flex items-center gap-2">
                               {!lock.withdrawn && isUnlocked(lock.unlockTs) && (
                                 <button
-                                  onClick={() => handleWithdraw(lock)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleWithdraw(lock);
+                                  }}
                                   disabled={withdrawingId === lock.id}
                                   className="px-4 py-2 bg-green-500/20 text-green-400 rounded-lg font-medium hover:bg-green-500/30 transition-colors disabled:opacity-50"
                                 >
@@ -744,18 +754,33 @@ export default function Locks() {
                                   )}
                                 </button>
                               )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  router.push(`/locks/${encodeURIComponent(lock.id)}`);
+                                }}
+                                className="p-2 rounded-lg bg-[#0B1418] border border-[#D4F6D3]/20 text-gray-400 hover:text-white hover:border-[#D4F6D3]/50 transition-all"
+                                title="View Analytics"
+                              >
+                                <BarChart3 className="h-4 w-4" />
+                              </button>
                               <a
                                 href={getExplorerUrl(lock.txHash)}
                                 target="_blank"
                                 rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
                                 className="p-2 rounded-lg bg-[#0B1418] border border-[#D4F6D3]/20 text-gray-400 hover:text-white hover:border-[#D4F6D3]/50 transition-all"
                               >
                                 <ExternalLink className="h-4 w-4" />
                               </a>
+                              <ChevronRight className="h-5 w-5 text-gray-500 group-hover:text-[#D4F6D3] transition-colors" />
                             </div>
                           </div>
 
-                          <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4">
+                          <div
+                            className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4"
+                            onClick={() => router.push(`/locks/${encodeURIComponent(lock.id)}`)}
+                          >
                             <div>
                               <p className="text-xs text-gray-500">Unlock Date</p>
                               <p className="text-white font-medium">
@@ -783,7 +808,10 @@ export default function Locks() {
                                 {lock.token}
                               </code>
                               <button
-                                onClick={() => copyToClipboard(lock.token)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  copyToClipboard(lock.token);
+                                }}
                                 className="p-1.5 rounded-lg bg-[#0B1418] border border-[#D4F6D3]/20 text-gray-400 hover:text-white hover:border-[#D4F6D3]/50 transition-all"
                               >
                                 {copiedAddress === lock.token ? (

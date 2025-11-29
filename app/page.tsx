@@ -83,7 +83,7 @@ export default function Home() {
             <SidebarTrigger className="mb-4" />
             
             {/* Projects Showcase Section */}
-            <section className="pr-4">
+            <section className="pr-4 pb-8">
               <div>
                 <div className="flex items-center justify-between mb-8">
                   <h2 className="text-4xl font-light text-white">

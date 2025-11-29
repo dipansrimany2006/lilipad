@@ -474,8 +474,9 @@ function isLegitimateToken(
 
 export async function getWalletFungibleAssets(walletAddress: string): Promise<WalletToken[]> {
   try {
-    const balances = await aptos.getCurrentFungibleAssetBalances({
-      ownerAddress: walletAddress,
+    // Use getAccountCoinsData which includes metadata and proper asset types
+    const balances = await aptos.getAccountCoinsData({
+      accountAddress: walletAddress,
     });
 
     console.log("Raw balances from API:", JSON.stringify(balances, (_, v) => typeof v === 'bigint' ? v.toString() : v, 2));
@@ -491,14 +492,26 @@ export async function getWalletFungibleAssets(walletAddress: string): Promise<Wa
       });
 
       if (balance.amount > 0) {
-        const metadata = balance.asset_type || "";
-        const knownToken = KNOWN_TOKENS[metadata];
+        const assetType = balance.asset_type || "";
 
-        // Get metadata from API - check different possible property paths
-        const apiName = balance.metadata?.name || (balance as any).name;
-        const apiSymbol = balance.metadata?.symbol || (balance as any).symbol;
-        const apiIconUri = balance.metadata?.icon_uri || balance.metadata?.iconUri || (balance as any).icon_uri;
-        const apiDecimals = balance.metadata?.decimals ?? (balance as any).decimals;
+        // Check if this is a valid FA metadata address (not a coin type string with ::)
+        // Coin type strings like "0x1::aptos_coin::AptosCoin" are not valid for FA locking
+        if (assetType.includes('::')) {
+          console.log("Skipping legacy coin type (contains ::):", assetType);
+          continue;
+        }
+
+        // Now we have a valid FA metadata address
+        const metadata = assetType;
+
+        // Get metadata from the balance response
+        const apiName = balance.metadata?.name;
+        const apiSymbol = balance.metadata?.symbol;
+        const apiDecimals = balance.metadata?.decimals;
+        const apiIconUri = balance.metadata?.icon_uri;
+
+        // Check known tokens for fallback
+        const knownToken = KNOWN_TOKENS[metadata] || KNOWN_TOKENS[assetType];
 
         console.log("Token info:", { metadata, apiName, apiSymbol, knownToken: !!knownToken });
 
@@ -515,6 +528,7 @@ export async function getWalletFungibleAssets(walletAddress: string): Promise<Wa
         const decimals = apiDecimals ?? knownToken?.decimals ?? 8;
 
         tokens.push({
+          id: balance.storage_id,
           metadata,
           name,
           symbol,
@@ -562,4 +576,176 @@ export function parseTokenAmount(amount: string, decimals: number): bigint {
   const paddedFrac = fracPart.padEnd(decimals, "0").slice(0, decimals);
   const rawAmount = intPart + paddedFrac;
   return BigInt(rawAmount);
+}
+
+// ========================================
+// Launchpad Module
+// ========================================
+
+// Price precision constant (must match contract)
+export const PRICE_PRECISION = BigInt(1_000_000_000); // 1e9
+
+export interface SaleInfo {
+  id: number;
+  projectPointerOpt: string | null;
+  owner: string;
+  token: string;
+  totalTokens: bigint;
+  tokensSold: bigint;
+  pricePerToken: bigint; // Scaled by PRICE_PRECISION
+  startTs: number;
+  endTs: number;
+  softCap: bigint;
+  raisedApt: bigint;
+  escrowed: boolean;
+  softCapReached: boolean;
+}
+
+export interface CreateSaleParams {
+  projectPointerOpt?: Uint8Array | null;
+  token: string;
+  totalTokens: bigint;
+  pricePerToken: bigint; // In APT (octas), will be scaled
+  startTs: number;
+  endTs: number;
+  softCap: bigint;
+}
+
+// Launchpad View Functions
+export async function getSale(saleId: number): Promise<SaleInfo> {
+  const result = await aptos.view({
+    payload: {
+      function: getModuleId("launchpad", "get_sale") as `${string}::${string}::${string}`,
+      typeArguments: [],
+      functionArguments: [saleId],
+    },
+  });
+
+  const [
+    id,
+    projectPointerOpt,
+    owner,
+    token,
+    totalTokens,
+    tokensSold,
+    pricePerToken,
+    startTs,
+    endTs,
+    softCap,
+    raisedApt,
+    escrowed,
+    softCapReached,
+  ] = result;
+
+  return {
+    id: Number(id),
+    projectPointerOpt: projectPointerOpt as string | null,
+    owner: owner as string,
+    token: token as string,
+    totalTokens: BigInt(totalTokens as string),
+    tokensSold: BigInt(tokensSold as string),
+    pricePerToken: BigInt(pricePerToken as string),
+    startTs: Number(startTs),
+    endTs: Number(endTs),
+    softCap: BigInt(softCap as string),
+    raisedApt: BigInt(raisedApt as string),
+    escrowed: escrowed as boolean,
+    softCapReached: softCapReached as boolean,
+  };
+}
+
+export async function getSaleCounter(): Promise<number> {
+  const [counter] = await aptos.view({
+    payload: {
+      function: getModuleId("launchpad", "get_sale_counter") as `${string}::${string}::${string}`,
+      typeArguments: [],
+      functionArguments: [],
+    },
+  });
+  return Number(counter);
+}
+
+export async function computeTokensForApt(aptAmount: bigint, pricePerToken: bigint): Promise<bigint> {
+  const [tokens] = await aptos.view({
+    payload: {
+      function: getModuleId("launchpad", "compute_tokens_for_apt") as `${string}::${string}::${string}`,
+      typeArguments: [],
+      functionArguments: [aptAmount.toString(), pricePerToken.toString()],
+    },
+  });
+  return BigInt(tokens as string);
+}
+
+// Launchpad Transaction Builders
+export function buildCreateSalePayload(params: CreateSaleParams): InputGenerateTransactionPayloadData {
+  return {
+    function: getModuleId("launchpad", "create_sale") as `${string}::${string}::${string}`,
+    typeArguments: [],
+    functionArguments: [
+      params.projectPointerOpt ? Array.from(params.projectPointerOpt) : [],
+      params.token,
+      params.totalTokens.toString(),
+      params.pricePerToken.toString(),
+      params.startTs,
+      params.endTs,
+      params.softCap.toString(),
+    ],
+  };
+}
+
+export function buildDepositSaleTokensPayload(
+  saleId: number,
+  amount: bigint
+): InputGenerateTransactionPayloadData {
+  return {
+    function: getModuleId("launchpad", "deposit_sale_tokens") as `${string}::${string}::${string}`,
+    typeArguments: [],
+    functionArguments: [saleId, amount.toString()],
+  };
+}
+
+export function buildBuyPayload(
+  saleId: number,
+  aptAmount: bigint,
+  vestingDurationSecs: number
+): InputGenerateTransactionPayloadData {
+  return {
+    function: getModuleId("launchpad", "buy") as `${string}::${string}::${string}`,
+    typeArguments: [],
+    functionArguments: [saleId, aptAmount.toString(), vestingDurationSecs],
+  };
+}
+
+export function buildWithdrawProceedsPayload(
+  saleId: number,
+  to: string
+): InputGenerateTransactionPayloadData {
+  return {
+    function: getModuleId("launchpad", "withdraw_proceeds") as `${string}::${string}::${string}`,
+    typeArguments: [],
+    functionArguments: [saleId, to],
+  };
+}
+
+// Helper to calculate APT price from human-readable format
+// e.g., "0.001" APT per token -> scaled price
+export function aptToPrice(aptPerToken: string): bigint {
+  const [intPart, fracPart = ""] = aptPerToken.split(".");
+  const paddedFrac = fracPart.padEnd(9, "0").slice(0, 9);
+  return BigInt(intPart + paddedFrac);
+}
+
+// Helper to format price back to human-readable APT
+export function priceToApt(scaledPrice: bigint): string {
+  const priceStr = scaledPrice.toString().padStart(10, "0");
+  const intPart = priceStr.slice(0, -9) || "0";
+  const fracPart = priceStr.slice(-9).replace(/0+$/, "");
+  if (fracPart === "") return intPart;
+  return `${intPart}.${fracPart}`;
+}
+
+// Helper to format APT amount (octas to APT)
+export function formatAptAmount(octas: bigint): string {
+  const apt = Number(octas) / 1e8;
+  return apt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 });
 }

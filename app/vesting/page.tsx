@@ -1,11 +1,19 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import Navbar from "@/components/navbar";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Poppins } from "next/font/google";
 import { MagicCard } from "@/components/ui/magic-card";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
+import { Area, AreaChart, XAxis, YAxis, CartesianGrid, ReferenceLine } from "recharts";
 import {
   Droplets,
   ArrowLeft,
@@ -22,6 +30,8 @@ import {
   Activity,
   ChevronDown,
   Coins,
+  ChevronRight,
+  BarChart3,
 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -55,6 +65,7 @@ interface StoredStream {
 }
 
 export default function Vesting() {
+  const router = useRouter();
   const { account, signAndSubmitTransaction, connected } = useWallet();
   const [showModal, setShowModal] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -80,6 +91,91 @@ export default function Vesting() {
     startTime: "",
     endTime: "",
   });
+
+  // Chart configuration
+  const chartConfig = {
+    vested: {
+      label: "Tokens Vested",
+      color: "#D4F6D3",
+    },
+  } satisfies ChartConfig;
+
+  // Generate chart data based on form inputs
+  const chartData = useMemo(() => {
+    if (!startDate || !endDate || !formData.totalAmount) {
+      return [];
+    }
+
+    const total = parseFloat(formData.totalAmount) || 0;
+    if (total <= 0) return [];
+
+    const [startHours, startMinutes] = (formData.startTime || "00:00").split(":").map(Number);
+    const [endHours, endMinutes] = (formData.endTime || "00:00").split(":").map(Number);
+
+    const startDateTime = new Date(startDate);
+    startDateTime.setHours(startHours, startMinutes, 0, 0);
+    const endDateTime = new Date(endDate);
+    endDateTime.setHours(endHours, endMinutes, 0, 0);
+
+    if (endDateTime <= startDateTime) return [];
+
+    const duration = endDateTime.getTime() - startDateTime.getTime();
+    const dataPoints: { date: string; vested: number; fullDate: string }[] = [];
+
+    // Generate data points (max 12 for readability)
+    const numPoints = Math.min(12, Math.ceil(duration / (24 * 60 * 60 * 1000)) + 1);
+    const interval = duration / (numPoints - 1);
+
+    for (let i = 0; i < numPoints; i++) {
+      const pointTime = new Date(startDateTime.getTime() + interval * i);
+      const elapsed = pointTime.getTime() - startDateTime.getTime();
+      const vestedAmount = (total * elapsed) / duration;
+
+      dataPoints.push({
+        date: format(pointTime, "MMM d"),
+        vested: Math.round(vestedAmount * 100) / 100,
+        fullDate: format(pointTime, "PPP p"),
+      });
+    }
+
+    return dataPoints;
+  }, [startDate, endDate, formData.totalAmount, formData.startTime, formData.endTime]);
+
+  // Calculate current vesting position for reference line
+  const currentVestingInfo = useMemo(() => {
+    if (!startDate || !endDate || !formData.totalAmount) return null;
+
+    const total = parseFloat(formData.totalAmount) || 0;
+    if (total <= 0) return null;
+
+    const [startHours, startMinutes] = (formData.startTime || "00:00").split(":").map(Number);
+    const [endHours, endMinutes] = (formData.endTime || "00:00").split(":").map(Number);
+
+    const startDateTime = new Date(startDate);
+    startDateTime.setHours(startHours, startMinutes, 0, 0);
+    const endDateTime = new Date(endDate);
+    endDateTime.setHours(endHours, endMinutes, 0, 0);
+
+    const now = new Date();
+    const duration = endDateTime.getTime() - startDateTime.getTime();
+
+    if (now < startDateTime) {
+      return { position: 0, label: "Not Started", vested: 0 };
+    }
+    if (now >= endDateTime) {
+      return { position: 100, label: "Fully Vested", vested: total };
+    }
+
+    const elapsed = now.getTime() - startDateTime.getTime();
+    const progress = (elapsed / duration) * 100;
+    const vestedNow = (total * elapsed) / duration;
+
+    return {
+      position: progress,
+      label: format(now, "MMM d"),
+      vested: Math.round(vestedNow * 100) / 100,
+    };
+  }, [startDate, endDate, formData.totalAmount, formData.startTime, formData.endTime]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -340,11 +436,11 @@ export default function Vesting() {
 
   const calculateUnlocked = (stream: StoredStream) => {
     const now = Math.floor(Date.now() / 1000);
-    const total = BigInt(stream.totalAmount);
-    if (now <= stream.startTs) return BigInt(0);
+    const total = parseFloat(stream.totalAmount) || 0;
+    if (now <= stream.startTs) return 0;
     if (now >= stream.endTs) return total;
-    const elapsed = BigInt(now - stream.startTs);
-    const duration = BigInt(stream.endTs - stream.startTs);
+    const elapsed = now - stream.startTs;
+    const duration = stream.endTs - stream.startTs;
     return (total * elapsed) / duration;
   };
 
@@ -376,7 +472,7 @@ export default function Vesting() {
           <main className="flex-1 overflow-auto p-4">
             <SidebarTrigger className="mb-4" />
 
-            <section className="px-4 max-w-4xl mx-auto">
+            <section className="px-4 max-w-4xl mx-auto pb-8">
               {/* Header */}
               <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">
@@ -723,6 +819,155 @@ export default function Vesting() {
                     </MagicCard>
                   </div>
 
+                  {/* Vesting Schedule Chart */}
+                  <MagicCard
+                    className="p-6 rounded-2xl"
+                    gradientSize={200}
+                    gradientFrom="#d4f6d3"
+                    gradientTo="#0b1418"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h3 className="text-lg font-medium text-white flex items-center gap-2">
+                          <BarChart3 className="h-5 w-5 text-[#D4F6D3]" />
+                          Vesting Schedule Preview
+                        </h3>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Visual representation of your linear vesting stream
+                        </p>
+                      </div>
+                      {chartData.length > 0 && currentVestingInfo && (
+                        <div className="text-right">
+                          <p className="text-xs text-gray-500">Today&apos;s Position</p>
+                          <p className="text-sm font-medium text-[#D4F6D3]">
+                            {currentVestingInfo.vested.toLocaleString()} {selectedToken?.symbol || 'tokens'}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {chartData.length > 0 ? (
+                      <ChartContainer config={chartConfig} className="h-[280px] w-full">
+                        <AreaChart
+                          data={chartData}
+                          margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                        >
+                          <defs>
+                            <linearGradient id="vestingGradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#D4F6D3" stopOpacity={0.4} />
+                              <stop offset="100%" stopColor="#D4F6D3" stopOpacity={0.05} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            stroke="#D4F6D3"
+                            strokeOpacity={0.1}
+                            vertical={false}
+                          />
+                          <XAxis
+                            dataKey="date"
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: '#9ca3af', fontSize: 12 }}
+                            dy={10}
+                          />
+                          <YAxis
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: '#9ca3af', fontSize: 12 }}
+                            dx={-10}
+                            tickFormatter={(value) => value.toLocaleString()}
+                          />
+                          <ChartTooltip
+                            content={
+                              <ChartTooltipContent
+                                className="bg-[#0B1418] border-[#D4F6D3]/20"
+                                labelClassName="text-white"
+                                formatter={(value, name) => (
+                                  <div className="flex items-center gap-2">
+                                    <div className="h-2.5 w-2.5 rounded-full bg-[#D4F6D3]" />
+                                    <span className="text-gray-400">Vested:</span>
+                                    <span className="text-white font-medium">
+                                      {Number(value).toLocaleString()} {selectedToken?.symbol || 'tokens'}
+                                    </span>
+                                  </div>
+                                )}
+                              />
+                            }
+                          />
+                          <Area
+                            type="linear"
+                            dataKey="vested"
+                            stroke="#D4F6D3"
+                            strokeWidth={2}
+                            fill="url(#vestingGradient)"
+                            dot={false}
+                            activeDot={{
+                              r: 6,
+                              fill: "#D4F6D3",
+                              stroke: "#0B1418",
+                              strokeWidth: 2,
+                            }}
+                          />
+                          {currentVestingInfo && currentVestingInfo.position > 0 && currentVestingInfo.position < 100 && (
+                            <ReferenceLine
+                              x={currentVestingInfo.label}
+                              stroke="#D4F6D3"
+                              strokeDasharray="5 5"
+                              strokeOpacity={0.6}
+                              label={{
+                                value: "Today",
+                                position: "top",
+                                fill: "#D4F6D3",
+                                fontSize: 11,
+                              }}
+                            />
+                          )}
+                        </AreaChart>
+                      </ChartContainer>
+                    ) : (
+                      <div className="h-[280px] flex items-center justify-center border border-dashed border-[#D4F6D3]/20 rounded-xl">
+                        <div className="text-center">
+                          <BarChart3 className="h-12 w-12 text-gray-600 mx-auto mb-3" />
+                          <p className="text-gray-500 text-sm">
+                            Enter amount and select dates to preview vesting schedule
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Chart Legend */}
+                    {chartData.length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-[#D4F6D3]/10 grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div>
+                          <p className="text-xs text-gray-500">Start Date</p>
+                          <p className="text-white font-medium text-sm">
+                            {startDate ? format(startDate, "MMM d, yyyy") : "-"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">End Date</p>
+                          <p className="text-white font-medium text-sm">
+                            {endDate ? format(endDate, "MMM d, yyyy") : "-"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">Total Amount</p>
+                          <p className="text-white font-medium text-sm">
+                            {parseFloat(formData.totalAmount || "0").toLocaleString()} {selectedToken?.symbol || 'tokens'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">Vesting Type</p>
+                          <p className="text-[#D4F6D3] font-medium text-sm flex items-center gap-1">
+                            <Activity className="h-3 w-3" />
+                            Linear
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </MagicCard>
+
                   {/* Submit Button */}
                   <div className="flex justify-end pt-6 pb-8">
                     <button
@@ -793,7 +1038,7 @@ export default function Vesting() {
                       {streams.map((stream) => {
                         const progress = calculateProgress(stream);
                         const unlocked = calculateUnlocked(stream);
-                        const claimed = BigInt(stream.claimed);
+                        const claimed = parseFloat(stream.claimed) || 0;
                         const claimable = unlocked - claimed;
                         const isBeneficiary = account?.address &&
                           stream.beneficiary.toLowerCase() === account.address.toString().toLowerCase();
@@ -801,19 +1046,22 @@ export default function Vesting() {
                         return (
                           <MagicCard
                             key={stream.id}
-                            className="p-6 rounded-2xl"
+                            className="p-6 rounded-2xl cursor-pointer hover:border-[#D4F6D3]/50 transition-all group"
                             gradientSize={200}
                             gradientFrom="#d4f6d3"
                             gradientTo="#0b1418"
                           >
-                            <div className="flex items-start justify-between">
+                            <div
+                              className="flex items-start justify-between"
+                              onClick={() => router.push(`/vesting/${encodeURIComponent(stream.id)}`)}
+                            >
                               <div className="flex items-center gap-4">
                                 <div className="w-12 h-12 rounded-full bg-[#D4F6D3]/20 flex items-center justify-center">
                                   <Droplets className="h-6 w-6 text-[#D4F6D3]" />
                                 </div>
                                 <div>
                                   <h3 className="text-xl font-medium text-white">
-                                    {BigInt(stream.totalAmount).toLocaleString()} tokens
+                                    {parseFloat(stream.totalAmount).toLocaleString()} tokens
                                   </h3>
                                   <p className="text-sm text-[#D4F6D3]">
                                     {formatTimeRemaining(stream.endTs)}
@@ -821,9 +1069,12 @@ export default function Vesting() {
                                 </div>
                               </div>
                               <div className="flex items-center gap-2">
-                                {isBeneficiary && claimable > BigInt(0) && (
+                                {isBeneficiary && claimable > 0 && (
                                   <button
-                                    onClick={() => handleClaim(stream)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleClaim(stream);
+                                    }}
                                     disabled={claimingId === stream.id}
                                     className="px-4 py-2 bg-[#D4F6D3]/20 text-[#D4F6D3] rounded-lg font-medium hover:bg-[#D4F6D3]/30 transition-colors disabled:opacity-50"
                                   >
@@ -834,19 +1085,34 @@ export default function Vesting() {
                                     )}
                                   </button>
                                 )}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`/vesting/${encodeURIComponent(stream.id)}`);
+                                  }}
+                                  className="p-2 rounded-lg bg-[#0B1418] border border-[#D4F6D3]/20 text-gray-400 hover:text-white hover:border-[#D4F6D3]/50 transition-all"
+                                  title="View Analytics"
+                                >
+                                  <BarChart3 className="h-4 w-4" />
+                                </button>
                                 <a
                                   href={getExplorerUrl(stream.txHash)}
                                   target="_blank"
                                   rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
                                   className="p-2 rounded-lg bg-[#0B1418] border border-[#D4F6D3]/20 text-gray-400 hover:text-white hover:border-[#D4F6D3]/50 transition-all"
                                 >
                                   <ExternalLink className="h-4 w-4" />
                                 </a>
+                                <ChevronRight className="h-5 w-5 text-gray-500 group-hover:text-[#D4F6D3] transition-colors" />
                               </div>
                             </div>
 
                             {/* Progress Bar */}
-                            <div className="mt-4">
+                            <div
+                              className="mt-4"
+                              onClick={() => router.push(`/vesting/${encodeURIComponent(stream.id)}`)}
+                            >
                               <div className="flex justify-between text-xs text-gray-500 mb-2">
                                 <span>Progress</span>
                                 <span>{progress}% vested</span>
@@ -859,17 +1125,20 @@ export default function Vesting() {
                               </div>
                             </div>
 
-                            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div
+                              className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4"
+                              onClick={() => router.push(`/vesting/${encodeURIComponent(stream.id)}`)}
+                            >
                               <div>
                                 <p className="text-xs text-gray-500">Unlocked</p>
                                 <p className="text-white font-medium">
-                                  {unlocked.toLocaleString()}
+                                  {unlocked.toLocaleString(undefined, { maximumFractionDigits: 6 })}
                                 </p>
                               </div>
                               <div>
                                 <p className="text-xs text-gray-500">Claimed</p>
                                 <p className="text-white font-medium">
-                                  {claimed.toLocaleString()}
+                                  {claimed.toLocaleString(undefined, { maximumFractionDigits: 6 })}
                                 </p>
                               </div>
                               <div>
@@ -899,7 +1168,10 @@ export default function Vesting() {
                                     </span>
                                   )}
                                   <button
-                                    onClick={() => copyToClipboard(stream.beneficiary)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      copyToClipboard(stream.beneficiary);
+                                    }}
                                     className="p-1 rounded bg-[#0B1418] border border-[#D4F6D3]/20 text-gray-400 hover:text-white transition-all"
                                   >
                                     {copiedAddress === stream.beneficiary ? (
@@ -917,7 +1189,10 @@ export default function Vesting() {
                                     {shortenAddress(stream.token)}
                                   </code>
                                   <button
-                                    onClick={() => copyToClipboard(stream.token)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      copyToClipboard(stream.token);
+                                    }}
                                     className="p-1 rounded bg-[#0B1418] border border-[#D4F6D3]/20 text-gray-400 hover:text-white transition-all"
                                   >
                                     {copiedAddress === stream.token ? (

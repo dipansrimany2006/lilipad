@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Navbar from "@/components/navbar";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -16,6 +16,10 @@ import {
   ExternalLink,
   Copy,
   Check,
+  BarChart3,
+  TrendingUp,
+  Clock,
+  Database,
 } from "lucide-react";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import {
@@ -108,6 +112,42 @@ export default function Tokens() {
     await navigator.clipboard.writeText(address);
     setCopiedAddress(address);
     setTimeout(() => setCopiedAddress(null), 2000);
+  };
+
+  // Analytics data for token creation
+  const analytics = useMemo(() => {
+    const totalTokensCreated = tokens.length;
+    const totalInitialSupply = tokens.reduce(
+      (sum, t) => sum + BigInt(t.initialSupply || "0"),
+      BigInt(0)
+    );
+    const totalMaxSupply = tokens.reduce(
+      (sum, t) => sum + BigInt(t.maxSupply || "0"),
+      BigInt(0)
+    );
+    const latestToken = tokens.length > 0 ? tokens[0] : null;
+
+    return {
+      totalTokensCreated,
+      totalInitialSupply,
+      totalMaxSupply,
+      latestToken,
+    };
+  }, [tokens]);
+
+  const formatLargeNumber = (num: bigint) => {
+    if (num === BigInt(0)) return "0";
+    const numStr = num.toString();
+    if (numStr.length > 12) {
+      return (Number(num) / 1e12).toFixed(2) + "T";
+    } else if (numStr.length > 9) {
+      return (Number(num) / 1e9).toFixed(2) + "B";
+    } else if (numStr.length > 6) {
+      return (Number(num) / 1e6).toFixed(2) + "M";
+    } else if (numStr.length > 3) {
+      return (Number(num) / 1e3).toFixed(2) + "K";
+    }
+    return num.toLocaleString();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -249,7 +289,7 @@ export default function Tokens() {
           <main className="flex-1 overflow-auto p-4">
             <SidebarTrigger className="mb-4" />
 
-            <section className="px-4 max-w-4xl mx-auto">
+            <section className="px-4 max-w-4xl mx-auto pb-8">
               {/* Header */}
               <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">
@@ -279,6 +319,87 @@ export default function Tokens() {
                   </button>
                 )}
               </div>
+
+              {/* Analytics Overview */}
+              {!showForm && connected && tokens.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                  <MagicCard
+                    className="p-4 rounded-xl"
+                    gradientSize={150}
+                    gradientFrom="#d4f6d3"
+                    gradientTo="#0b1418"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-[#D4F6D3]/10">
+                        <BarChart3 className="h-5 w-5 text-[#D4F6D3]" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Tokens Created</p>
+                        <p className="text-lg font-medium text-white">{analytics.totalTokensCreated}</p>
+                      </div>
+                    </div>
+                  </MagicCard>
+
+                  <MagicCard
+                    className="p-4 rounded-xl"
+                    gradientSize={150}
+                    gradientFrom="#d4f6d3"
+                    gradientTo="#0b1418"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-blue-500/10">
+                        <TrendingUp className="h-5 w-5 text-blue-400" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Total Initial Supply</p>
+                        <p className="text-lg font-medium text-white">
+                          {formatLargeNumber(analytics.totalInitialSupply)}
+                        </p>
+                      </div>
+                    </div>
+                  </MagicCard>
+
+                  <MagicCard
+                    className="p-4 rounded-xl"
+                    gradientSize={150}
+                    gradientFrom="#d4f6d3"
+                    gradientTo="#0b1418"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-purple-500/10">
+                        <Database className="h-5 w-5 text-purple-400" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Total Max Supply</p>
+                        <p className="text-lg font-medium text-white">
+                          {analytics.totalMaxSupply > BigInt(0)
+                            ? formatLargeNumber(analytics.totalMaxSupply)
+                            : "Unlimited"}
+                        </p>
+                      </div>
+                    </div>
+                  </MagicCard>
+
+                  <MagicCard
+                    className="p-4 rounded-xl"
+                    gradientSize={150}
+                    gradientFrom="#d4f6d3"
+                    gradientTo="#0b1418"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-green-500/10">
+                        <Clock className="h-5 w-5 text-green-400" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Latest Token</p>
+                        <p className="text-lg font-medium text-white truncate max-w-[120px]">
+                          {analytics.latestToken?.symbol || "—"}
+                        </p>
+                      </div>
+                    </div>
+                  </MagicCard>
+                </div>
+              )}
 
               {/* Transaction Result */}
               {txResult && (

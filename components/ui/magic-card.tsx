@@ -13,6 +13,7 @@ interface MagicCardProps {
   gradientOpacity?: number
   gradientFrom?: string
   gradientTo?: string
+  onClick?: () => void
 }
 
 export function MagicCard({
@@ -23,6 +24,7 @@ export function MagicCard({
   gradientOpacity = 0.8,
   gradientFrom = "#0B1418",
   gradientTo = "##D4F6D3",
+  onClick,
 }: MagicCardProps) {
   const mouseX = useMotionValue(-gradientSize)
   const mouseY = useMotionValue(-gradientSize)
@@ -70,10 +72,11 @@ export function MagicCard({
 
   return (
     <div
-      className={cn("group relative rounded-[inherit]", className)}
+      className={cn("group relative rounded-[inherit]", onClick && "cursor-pointer", className)}
       onPointerMove={handlePointerMove}
       onPointerLeave={reset}
       onPointerEnter={reset}
+      onClick={onClick}
     >
       <motion.div
         className="bg-border pointer-events-none absolute inset-0 rounded-[inherit] duration-300 group-hover:opacity-100"
