@@ -6,7 +6,8 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Poppins } from "next/font/google";
 import { MagicCard } from "@/components/ui/magic-card";
-import { Search } from "lucide-react";
+import { Search, Plus } from "lucide-react";
+import Link from "next/link";
 
 const poppins = Poppins({ weight: ["200","300","400", "700"], subsets: ["latin"] });
 
@@ -84,9 +85,18 @@ export default function Home() {
             {/* Projects Showcase Section */}
             <section className="pr-4">
               <div>
-                <h2 className="text-4xl font-light text-white mb-8">
-                  Explore Projects
-                </h2>
+                <div className="flex items-center justify-between mb-8">
+                  <h2 className="text-4xl font-light text-white">
+                    Explore Projects
+                  </h2>
+                  <Link
+                    href="/create-project"
+                    className="flex items-center gap-2 px-5 py-2.5 bg-[#D4F6D3] text-[#0B1418] rounded-xl font-medium hover:bg-[#c2e8c1] transition-colors"
+                  >
+                    <Plus className="h-5 w-5" />
+                    Create Project
+                  </Link>
+                </div>
 
                 {/* Search Bar */}
                 <div className="relative mb-8">
