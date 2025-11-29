@@ -5,7 +5,10 @@
       "mcp__ide__getDiagnostics",
       "Bash(bun run build:*)",
       "Bash(bunx shadcn@latest add chart:*)",
-      "Bash(npx shadcn@latest add chart --yes)"
+      "Bash(npx shadcn@latest add chart --yes)",
+      "Bash(cat:*)",
+      "WebSearch",
+      "WebFetch(domain:explorer.aptoslabs.com)"
     ],
     "deny": [],
     "ask": []

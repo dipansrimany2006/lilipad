@@ -24,6 +24,11 @@ export const sidebarLinks = [
     href: "/vesting",
     icon: "Droplets",
   },
+  {
+    name: "Vault",
+    href: "/vault",
+    icon: "Vault",
+  },
 ];
 
 
