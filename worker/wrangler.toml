@@ -1,0 +1,8 @@
+name = "lilipad-api"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lilipad-db"
+database_id = "14a16e7b-1d9f-41aa-a8e5-2f4993345abc"

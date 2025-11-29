@@ -1,73 +1,67 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Navbar from "@/components/navbar";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Poppins } from "next/font/google";
 import { MagicCard } from "@/components/ui/magic-card";
-import { Search, Plus } from "lucide-react";
+import { Search, Plus, Loader2, Github, Globe, FileText, ExternalLink, Calendar, Coins, Wallet } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 
 const poppins = Poppins({ weight: ["200","300","400", "700"], subsets: ["latin"] });
 
-const dummyProjects = [
-  {
-    id: 1,
-    title: "DeFi Lending Protocol",
-    description: "A decentralized lending platform built on Aptos blockchain with automated market making",
-    category: "DeFi",
-    funding: "$50,000",
-    backers: 120,
-  },
-  {
-    id: 2,
-    title: "NFT Marketplace",
-    description: "Next-generation NFT marketplace with zero gas fees and instant transactions",
-    category: "NFT",
-    funding: "$35,000",
-    backers: 85,
-  },
-  {
-    id: 3,
-    title: "DAO Governance Platform",
-    description: "Decentralized autonomous organization tools for community-driven decision making",
-    category: "DAO",
-    funding: "$75,000",
-    backers: 200,
-  },
-  {
-    id: 4,
-    title: "Cross-Chain Bridge",
-    description: "Secure and fast asset transfer between Aptos and other blockchains",
-    category: "Infrastructure",
-    funding: "$100,000",
-    backers: 150,
-  },
-  {
-    id: 5,
-    title: "GameFi Platform",
-    description: "Play-to-earn gaming ecosystem with integrated token rewards and NFT items",
-    category: "Gaming",
-    funding: "$60,000",
-    backers: 250,
-  },
-  {
-    id: 6,
-    title: "Social Impact Fund",
-    description: "Blockchain-based crowdfunding for environmental and social causes",
-    category: "Social",
-    funding: "$42,000",
-    backers: 180,
-  },
-];
+interface Project {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  image_url?: string;
+  github_url?: string;
+  website_url?: string;
+  docs_url?: string;
+  x_url?: string;
+  project_token: string;
+  creator_wallet: string;
+  funding_amount: number;
+  backers_count: number;
+  created_at: string;
+  updated_at: string;
+}
 
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const filteredProjects = dummyProjects.filter(
+  useEffect(() => {
+    async function fetchProjects() {
+      try {
+        setLoading(true);
+        const response = await fetch("/api/projects");
+        const data = await response.json();
+
+        if (data.success) {
+          setProjects(data.projects);
+        } else {
+          setError(data.error || "Failed to fetch projects");
+        }
+      } catch (err) {
+        setError("Failed to fetch projects");
+        console.error("Error fetching projects:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchProjects();
+  }, []);
+
+  const filteredProjects = projects.filter(
     (project) =>
-      project.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       project.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
       project.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -113,57 +107,147 @@ export default function Home() {
                 </div>
 
                 {/* Projects Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {filteredProjects.map((project) => (
-                    <MagicCard
-                      key={project.id}
-                      className="p-6 cursor-pointer h-full rounded-2xl"
-                      gradientSize={200}
-                      gradientFrom="#d4f6d3"
-                      gradientTo="#0b1418"
-                    >
-                      <div className="flex flex-col h-full space-y-4">
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-xl font-medium text-white">
-                              {project.title}
-                            </h3>
-                            <span className="px-3 py-1 bg-[#d4f6d3] text-[#0b1418] rounded-full text-xs font-medium">
-                              {project.category}
-                            </span>
-                          </div>
-                          <p className="text-gray-300 text-sm leading-relaxed">
-                            {project.description}
-                          </p>
-                        </div>
-
-                        <div className="mt-auto pt-4 border-t border-white/10">
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <p className="text-xs text-gray-400">Total Raised</p>
-                              <p className="text-lg font-medium text-white">
-                                {project.funding}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-xs text-gray-400">Backers</p>
-                              <p className="text-lg font-medium text-white">
-                                {project.backers}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </MagicCard>
-                  ))}
-                </div>
-
-                {filteredProjects.length === 0 && (
-                  <div className="text-center py-12">
-                    <p className="text-gray-400 text-lg">
-                      No projects found matching your search.
-                    </p>
+                {loading ? (
+                  <div className="flex justify-center items-center py-20">
+                    <Loader2 className="h-10 w-10 text-[#D4F6D3] animate-spin" />
                   </div>
+                ) : error ? (
+                  <div className="text-center py-12">
+                    <p className="text-red-400 text-lg">{error}</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {filteredProjects.map((project) => (
+                        <MagicCard
+                          key={project.id}
+                          className="p-4 cursor-pointer rounded-2xl"
+                          gradientSize={200}
+                          gradientFrom="#d4f6d3"
+                          gradientTo="#0b1418"
+                        >
+                          <div className="flex gap-3">
+                            {/* Left: Project Image (1:1 ratio) */}
+                            <div className="relative w-24 h-24 flex-shrink-0 rounded-xl overflow-hidden bg-white/5">
+                              {project.image_url ? (
+                                <Image
+                                  src={project.image_url}
+                                  alt={project.name}
+                                  fill
+                                  className="object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <span className="text-4xl font-bold text-[#d4f6d3]/50">
+                                    {project.name.charAt(0).toUpperCase()}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Right: Content */}
+                            <div className="flex flex-col flex-1 min-w-0">
+                              {/* Header: Name & Category */}
+                              <div className="mb-1">
+                                <div className="flex items-start justify-between gap-2">
+                                  <h3 className="text-lg font-medium text-white truncate">
+                                    {project.name}
+                                  </h3>
+                                  <span className="px-2 py-0.5 bg-[#d4f6d3] text-[#0b1418] rounded-full text-xs font-medium flex-shrink-0">
+                                    {project.category}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Description */}
+                              <p className="text-gray-400 text-sm leading-relaxed line-clamp-2 mb-2">
+                                {project.description}
+                              </p>
+
+                              {/* Token & Creator - Compact */}
+                              <div className="space-y-1 text-sm mb-2">
+                                <div className="flex items-center gap-1.5">
+                                  <Coins className="h-4 w-4 text-[#d4f6d3] flex-shrink-0" />
+                                  <span className="text-white font-mono truncate">
+                                    {project.project_token.length > 12
+                                      ? `${project.project_token.slice(0, 6)}...${project.project_token.slice(-4)}`
+                                      : project.project_token}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <Wallet className="h-4 w-4 text-[#d4f6d3] flex-shrink-0" />
+                                  <span className="text-white font-mono">
+                                    {project.creator_wallet.slice(0, 6)}...{project.creator_wallet.slice(-4)}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Social Links */}
+                              <div className="flex items-center gap-1.5">
+                                {project.github_url && (
+                                  <a
+                                    href={project.github_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-1.5 bg-white/5 hover:bg-white/10 rounded transition-colors"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <Github className="h-4 w-4 text-gray-300" />
+                                  </a>
+                                )}
+                                {project.website_url && (
+                                  <a
+                                    href={project.website_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-1.5 bg-white/5 hover:bg-white/10 rounded transition-colors"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <Globe className="h-4 w-4 text-gray-300" />
+                                  </a>
+                                )}
+                                {project.docs_url && (
+                                  <a
+                                    href={project.docs_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-1.5 bg-white/5 hover:bg-white/10 rounded transition-colors"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <FileText className="h-4 w-4 text-gray-300" />
+                                  </a>
+                                )}
+                                {project.x_url && (
+                                  <a
+                                    href={project.x_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-1.5 bg-white/5 hover:bg-white/10 rounded transition-colors"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <ExternalLink className="h-4 w-4 text-gray-300" />
+                                  </a>
+                                )}
+                                <span className="flex items-center gap-1 ml-2 text-gray-500 text-xs">
+                                  <Calendar className="h-3.5 w-3.5" />
+                                  {new Date(project.created_at).toLocaleDateString()}
+                                </span>
+                              </div>
+
+                            </div>
+                          </div>
+                        </MagicCard>
+                      ))}
+                    </div>
+
+                    {filteredProjects.length === 0 && (
+                      <div className="text-center py-12">
+                        <p className="text-gray-400 text-lg">
+                          No projects found matching your search.
+                        </p>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </section>
