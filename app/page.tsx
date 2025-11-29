@@ -108,7 +108,7 @@ export default function Home() {
                     placeholder="Search projects by name, description, or category..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-12 pr-4 py-4 bg-[#0B1418] backdrop-blur-sm border border-[#D4F6D3] rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0B1418] focus:border-transparent transition-all"
+                    className="w-full pl-12 pr-4 py-4 bg-[#0B1418] backdrop-blur-sm border-1 border-[#D4F6D0] rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0B1418] focus:border-transparent transition-all"
                   />
                 </div>
 
