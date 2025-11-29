@@ -1,0 +1,17 @@
+[package]
+name = "lilipad"
+version = "1.0.0"
+authors = []
+
+[addresses]
+lilipad = "_"
+
+[dev-addresses]
+lilipad = "0xab61f8c2bb9227d6d3a6c7571f791fa35ae3c5b8a7e1ac02a828330beb219d07"
+
+[dependencies.AptosFramework]
+git = "https://github.com/aptos-labs/aptos-framework.git"
+rev = "mainnet"
+subdir = "aptos-framework"
+
+[dev-dependencies]
