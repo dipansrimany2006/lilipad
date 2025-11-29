@@ -8,7 +8,7 @@ import { Poppins } from "next/font/google";
 import { MagicCard } from "@/components/ui/magic-card";
 import { Search } from "lucide-react";
 
-const poppins = Poppins({ weight: ["400", "700"], subsets: ["latin"] });
+const poppins = Poppins({ weight: ["200","300","400", "700"], subsets: ["latin"] });
 
 const dummyProjects = [
   {
@@ -84,21 +84,21 @@ export default function Home() {
             {/* Projects Showcase Section */}
             <section className="pr-4">
               <div>
-                <h2 className="text-4xl font-bold text-white mb-8">
+                <h2 className="text-4xl font-light text-white mb-8">
                   Explore Projects
                 </h2>
 
                 {/* Search Bar */}
                 <div className="relative mb-8">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Search className="h-5 w-5 text-gray-400" />
+                    <Search className="h-5 w-5 bg-[#0B1418] text-gray-400" />
                   </div>
                   <input
                     type="text"
                     placeholder="Search projects by name, description, or category..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-12 pr-4 py-4 bg-black/40 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                    className="w-full pl-12 pr-4 py-4 bg-[#0B1418] backdrop-blur-sm border border-[#D4F6D3] rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0B1418] focus:border-transparent transition-all"
                   />
                 </div>
 
@@ -108,17 +108,17 @@ export default function Home() {
                     <MagicCard
                       key={project.id}
                       className="p-6 cursor-pointer h-full rounded-2xl"
-                      gradientSize={300}
+                      gradientSize={200}
                       gradientFrom="#d4f6d3"
                       gradientTo="#0b1418"
                     >
                       <div className="flex flex-col h-full space-y-4">
                         <div>
                           <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-xl font-bold text-white">
+                            <h3 className="text-xl font-medium text-white">
                               {project.title}
                             </h3>
-                            <span className="px-3 py-1 bg-[#d4f6d3] text-[#0b1418] rounded-full text-xs font-semibold">
+                            <span className="px-3 py-1 bg-[#d4f6d3] text-[#0b1418] rounded-full text-xs font-medium">
                               {project.category}
                             </span>
                           </div>
@@ -131,13 +131,13 @@ export default function Home() {
                           <div className="flex justify-between items-center">
                             <div>
                               <p className="text-xs text-gray-400">Total Raised</p>
-                              <p className="text-lg font-bold text-white">
+                              <p className="text-lg font-medium text-white">
                                 {project.funding}
                               </p>
                             </div>
                             <div className="text-right">
                               <p className="text-xs text-gray-400">Backers</p>
-                              <p className="text-lg font-bold text-white">
+                              <p className="text-lg font-medium text-white">
                                 {project.backers}
                               </p>
                             </div>
