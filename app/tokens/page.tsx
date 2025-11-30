@@ -28,6 +28,7 @@ import {
   aptos,
 } from "@/lib/lilipadClient";
 import { NETWORK } from "@/constants";
+import { triggerSideCannons } from "@/components/side-canons";
 
 const poppins = Poppins({ weight: ["200", "300", "400", "700"], subsets: ["latin"] });
 
@@ -239,6 +240,9 @@ export default function Tokens() {
 
       // Update local state
       setTokens(prev => [newToken, ...prev]);
+
+      // Trigger confetti celebration
+      triggerSideCannons();
 
       setTxResult({
         success: true,

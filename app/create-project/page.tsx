@@ -20,6 +20,7 @@ import {
   Loader2
 } from "lucide-react";
 import Link from "next/link";
+import { triggerSideCannons } from "@/components/side-canons";
 
 const poppins = Poppins({ weight: ["200", "300", "400", "700"], subsets: ["latin"] });
 
@@ -106,7 +107,13 @@ export default function CreateProject() {
         throw new Error(data.error || "Failed to create project");
       }
 
-      router.push("/");
+      // Trigger confetti celebration
+      triggerSideCannons();
+
+      // Wait a bit for the user to see the confetti before redirecting
+      setTimeout(() => {
+        router.push("/");
+      }, 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create project");
     } finally {
