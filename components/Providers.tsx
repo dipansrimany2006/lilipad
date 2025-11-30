@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { SidebarProvider } from "@/components/ui/sidebar";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import type { PropsWithChildren } from "react";
 
 const WalletProvider = dynamic(
@@ -12,7 +13,9 @@ const WalletProvider = dynamic(
 export function Providers({ children }: PropsWithChildren) {
   return (
     <WalletProvider>
-      <SidebarProvider>{children}</SidebarProvider>
+      <TooltipProvider>
+        <SidebarProvider>{children}</SidebarProvider>
+      </TooltipProvider>
     </WalletProvider>
   );
 }

@@ -12,6 +12,7 @@ import {
   CirclePoundSterling,
   Vault,
   ArrowLeftRight,
+  PieChart,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { sidebarLinks } from "@/constants";
@@ -27,6 +28,7 @@ const getIcon = (iconName: string) => {
     CirclePoundSterling: CirclePoundSterling,
     Vault,
     ArrowLeftRight,
+    PieChart,
   };
   const IconComponent = iconMap[iconName as keyof typeof iconMap];
   return IconComponent ? <IconComponent className="w-5 h-5" /> : null;

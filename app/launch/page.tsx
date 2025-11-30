@@ -40,7 +40,9 @@ import {
   Shield,
   Timer,
   Sparkles,
+  Twitter,
 } from "lucide-react";
+import { DefiTooltip } from "@/components/defi-tooltip";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { format } from "date-fns";
 import {
@@ -63,6 +65,7 @@ import {
   type CreateSaleParams,
 } from "@/lib/lilipadClient";
 import { NETWORK } from "@/constants";
+import { shareToX, generateFairLaunchShareText } from "@/lib/shareUtils";
 
 const poppins = Poppins({ weight: ["200", "300", "400", "700"], subsets: ["latin"] });
 
@@ -127,6 +130,14 @@ export default function Launch() {
   const [buyAmount, setBuyAmount] = useState("");
   const [vestingDays, setVestingDays] = useState("30");
   const [isBuying, setIsBuying] = useState(false);
+
+  // Success modal state for fair launch creation
+  const [showLaunchSuccessModal, setShowLaunchSuccessModal] = useState(false);
+  const [createdSaleInfo, setCreatedSaleInfo] = useState<{
+    projectName: string;
+    tokenSymbol: string;
+    saleId: number;
+  } | null>(null);
 
   // Load data on mount and when account changes
   useEffect(() => {
@@ -575,10 +586,15 @@ export default function Launch() {
       allSales.push(storedSale);
       localStorage.setItem("lilipad_sales", JSON.stringify(allSales));
 
-      setTxResult({
-        success: true,
-        message: `Fair Launch created successfully! Sale ID: ${newSaleId}`,
+      // Store created sale info for share modal
+      setCreatedSaleInfo({
+        projectName: projects.find((p) => p.id === selectedProjectId)?.name || "Unknown",
+        tokenSymbol: selectedToken.symbol,
+        saleId: newSaleId,
       });
+
+      // Show success modal with share option
+      setShowLaunchSuccessModal(true);
 
       // Reset form
       setShowCreateForm(false);
@@ -722,14 +738,35 @@ export default function Launch() {
     return `https://explorer.aptoslabs.com/txn/${txHash}?network=${NETWORK}`;
   };
 
+  // Handle share to X after fair launch creation
+  const handleShareLaunchToX = () => {
+    if (createdSaleInfo) {
+      const shareOptions = generateFairLaunchShareText(
+        createdSaleInfo.projectName,
+        createdSaleInfo.tokenSymbol,
+        createdSaleInfo.saleId
+      );
+      shareToX(shareOptions);
+    }
+  };
+
+  const handleCloseLaunchSuccessModal = () => {
+    setShowLaunchSuccessModal(false);
+    setCreatedSaleInfo(null);
+  };
+
+  // Check if a sale is a demo sale
+  const isDemoSale = (saleId: number) => saleId >= 9001 && saleId <= 9005;
+
   // Render sale card
   const renderSaleCard = (sale: SaleInfo & { stored?: StoredSale }) => {
     const metrics = getSaleMetrics(sale);
+    const isDemo = isDemoSale(sale.id);
 
     return (
       <MagicCard
         key={sale.id}
-        className="p-6 rounded-2xl cursor-pointer hover:border-[#D4F6D3]/50 transition-all"
+        className="p-6 rounded-2xl cursor-pointer hover:border-[#D4F6D3]/50 transition-all relative"
         gradientSize={200}
         gradientFrom="#d4f6d3"
         gradientTo="#0b1418"
@@ -745,13 +782,13 @@ export default function Launch() {
             </p>
           </div>
           <Badge
-            className={
+            className={`${
               metrics.isActive
                 ? "bg-green-500/20 text-green-400 border-green-500/30"
                 : metrics.isUpcoming
                 ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
                 : "bg-gray-500/20 text-gray-400 border-gray-500/30"
-            }
+            }`}
           >
             {metrics.isActive ? "Live" : metrics.isUpcoming ? "Upcoming" : "Ended"}
           </Badge>
@@ -777,7 +814,9 @@ export default function Launch() {
             <p className="text-white font-medium">{priceToApt(sale.pricePerToken)} APT</p>
           </div>
           <div>
-            <p className="text-gray-500">Soft Cap</p>
+            <DefiTooltip term="softCap">
+              <p className="text-gray-500">Soft Cap</p>
+            </DefiTooltip>
             <p className="text-white font-medium">{formatAptAmount(sale.softCap)} APT</p>
           </div>
           <div>
@@ -911,7 +950,9 @@ export default function Launch() {
                 <Target className="h-5 w-5 text-[#D4F6D3]" />
               </div>
               <div>
-                <p className="text-xs text-gray-500">Soft Cap Progress</p>
+                <DefiTooltip term="softCap">
+                  <p className="text-xs text-gray-500">Soft Cap Progress</p>
+                </DefiTooltip>
                 <p className="text-lg font-medium text-white">
                   {metrics.softCapProgress.toFixed(1)}%
                 </p>
@@ -1091,7 +1132,9 @@ export default function Launch() {
 
                   {/* Vesting Period */}
                   <div>
-                    <label className="block text-sm text-gray-400 mb-2">Vesting Period</label>
+                    <DefiTooltip term="vestingPeriod">
+                      <label className="block text-sm text-gray-400 mb-2">Vesting Period</label>
+                    </DefiTooltip>
                     <Select value={vestingDays} onValueChange={setVestingDays}>
                       <SelectTrigger className="w-full bg-[#0B1418] border-[#D4F6D3]/20 text-white">
                         <SelectValue />
@@ -1105,7 +1148,7 @@ export default function Launch() {
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-gray-500 mt-2">
-                      Tokens will vest linearly over this period
+                      Tokens will vest <DefiTooltip term="linearVesting" showIcon={false}><span className="border-b border-dotted border-gray-500">linearly</span></DefiTooltip> over this period
                     </p>
                   </div>
 
@@ -1201,15 +1244,24 @@ export default function Launch() {
               <div className="space-y-3 text-sm">
                 <div className="flex items-center gap-2 text-gray-400">
                   <Shield className="h-4 w-4" />
-                  <span>Tokens escrowed in smart contract</span>
+                  <DefiTooltip term="escrow" showIcon={false}>
+                    <span className="border-b border-dotted border-gray-500/50">Tokens escrowed</span>
+                  </DefiTooltip>
+                  <span> in smart contract</span>
                 </div>
                 <div className="flex items-center gap-2 text-gray-400">
                   <Activity className="h-4 w-4" />
-                  <span>Linear vesting for all purchases</span>
+                  <DefiTooltip term="linearVesting" showIcon={false}>
+                    <span className="border-b border-dotted border-gray-500/50">Linear vesting</span>
+                  </DefiTooltip>
+                  <span> for all purchases</span>
                 </div>
                 <div className="flex items-center gap-2 text-gray-400">
                   <CheckCircle2 className="h-4 w-4" />
-                  <span>Fair launch - no pre-allocations</span>
+                  <DefiTooltip term="fairLaunch" showIcon={false}>
+                    <span className="border-b border-dotted border-gray-500/50">Fair launch</span>
+                  </DefiTooltip>
+                  <span> - no pre-allocations</span>
                 </div>
               </div>
             </MagicCard>
@@ -1935,6 +1987,46 @@ export default function Launch() {
                     </div>
                   )}
                 </>
+              )}
+
+              {/* Success Modal with Share to X option for Fair Launch creation */}
+              {showLaunchSuccessModal && createdSaleInfo && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+                  <MagicCard
+                    className="p-8 rounded-2xl max-w-md w-full text-center"
+                    gradientSize={200}
+                    gradientFrom="#d4f6d3"
+                    gradientTo="#0b1418"
+                  >
+                    <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-[#D4F6D3]/20 flex items-center justify-center">
+                      <Rocket className="h-8 w-8 text-[#D4F6D3]" />
+                    </div>
+                    <h3 className="text-2xl font-light text-white mb-3">
+                      Fair Launch Created!
+                    </h3>
+                    <p className="text-gray-400 mb-2">
+                      Your fair launch for &quot;{createdSaleInfo.projectName}&quot; (${createdSaleInfo.tokenSymbol}) is now live!
+                    </p>
+                    <p className="text-sm text-gray-500 mb-8">
+                      Sale ID: #{createdSaleInfo.saleId}
+                    </p>
+                    <div className="space-y-3">
+                      <button
+                        onClick={handleShareLaunchToX}
+                        className="w-full py-3 px-6 bg-black text-white rounded-xl font-medium hover:bg-gray-900 transition-colors flex items-center justify-center gap-2 border border-gray-700"
+                      >
+                        <Twitter className="h-5 w-5" />
+                        Share on X
+                      </button>
+                      <button
+                        onClick={handleCloseLaunchSuccessModal}
+                        className="w-full py-3 px-6 bg-[#D4F6D3] text-[#0B1418] rounded-xl font-medium hover:bg-[#c2e8c1] transition-colors"
+                      >
+                        View Launches
+                      </button>
+                    </div>
+                  </MagicCard>
+                </div>
               )}
             </section>
           </main>

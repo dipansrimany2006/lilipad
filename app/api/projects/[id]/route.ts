@@ -11,6 +11,17 @@ export async function GET(
     const { id } = await params;
 
     const response = await fetch(`${WORKER_URL}/api/projects/${id}`);
+
+    // Check if response is JSON before parsing
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      console.error("Non-JSON response from worker:", await response.text());
+      return NextResponse.json(
+        { success: false, error: "Worker returned invalid response" },
+        { status: 500 }
+      );
+    }
+
     const data = await response.json();
 
     return NextResponse.json(data, { status: response.status });

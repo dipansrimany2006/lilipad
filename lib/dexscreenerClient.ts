@@ -75,6 +75,13 @@ export async function getTokenPairs(tokenAddress: string): Promise<PairData[]> {
       return [];
     }
 
+    // Check if response is JSON before parsing
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      console.error("DexScreener returned non-JSON response");
+      return [];
+    }
+
     const data = await response.json();
     return Array.isArray(data) ? data : [];
   } catch (error) {

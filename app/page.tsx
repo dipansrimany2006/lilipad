@@ -28,7 +28,99 @@ interface Project {
   backers_count: number;
   created_at: string;
   updated_at: string;
+  isDemo?: boolean;
 }
+
+// Demo projects to showcase the platform capabilities
+const DEMO_PROJECTS: Project[] = [
+  {
+    id: "demo-1",
+    name: "Stellaryx Protocol",
+    category: "DeFi",
+    description: "Next-generation yield optimization protocol on Aptos with auto-compounding vaults and cross-chain liquidity aggregation.",
+    image_url: "https://picsum.photos/seed/stellaryx/200",
+    github_url: "https://github.com",
+    website_url: "https://example.com",
+    docs_url: "https://docs.example.com",
+    x_url: "https://x.com",
+    project_token: "0xdemo1...stellaryx",
+    creator_wallet: "0xdemo1...creator1",
+    funding_amount: 35000,
+    backers_count: 247,
+    created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
+    updated_at: new Date().toISOString(),
+    isDemo: true,
+  },
+  {
+    id: "demo-2",
+    name: "Pixelmon Realms",
+    category: "Gaming",
+    description: "Play-to-earn monster collection game with NFT creatures and PvP battles. Trade, breed, and evolve your digital companions.",
+    image_url: "https://picsum.photos/seed/pixelmon/200",
+    github_url: "https://github.com",
+    website_url: "https://example.com",
+    x_url: "https://x.com",
+    project_token: "0xdemo2...pixelmon",
+    creator_wallet: "0xdemo2...creator2",
+    funding_amount: 210000,
+    backers_count: 1523,
+    created_at: new Date(Date.now() - 86400000 * 5).toISOString(),
+    updated_at: new Date().toISOString(),
+    isDemo: true,
+  },
+  {
+    id: "demo-3",
+    name: "Chromavault",
+    category: "NFT",
+    description: "AI-powered generative art platform creating unique, on-chain artworks. Each piece is algorithmically composed and stored fully on Aptos.",
+    image_url: "https://picsum.photos/seed/chromavault/200",
+    github_url: "https://github.com",
+    website_url: "https://example.com",
+    docs_url: "https://docs.example.com",
+    project_token: "0xdemo3...chromavault",
+    creator_wallet: "0xdemo3...creator3",
+    funding_amount: 45000,
+    backers_count: 312,
+    created_at: new Date(Date.now() - 86400000 * 1).toISOString(),
+    updated_at: new Date().toISOString(),
+    isDemo: true,
+  },
+  {
+    id: "demo-4",
+    name: "NeuralForge",
+    category: "AI",
+    description: "Decentralized AI model training network. Contribute compute power and earn tokens while helping train open-source AI models.",
+    image_url: "https://picsum.photos/seed/neuralforge/200",
+    github_url: "https://github.com",
+    website_url: "https://example.com",
+    docs_url: "https://docs.example.com",
+    x_url: "https://x.com",
+    project_token: "0xdemo4...neuralforge",
+    creator_wallet: "0xdemo4...creator4",
+    funding_amount: 0,
+    backers_count: 0,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    isDemo: true,
+  },
+  {
+    id: "demo-5",
+    name: "Zenith Collective",
+    category: "DAO",
+    description: "Community-governed investment DAO focused on early-stage Aptos ecosystem projects. Members vote on allocations and share profits.",
+    image_url: "https://picsum.photos/seed/zenith/200",
+    github_url: "https://github.com",
+    website_url: "https://example.com",
+    x_url: "https://x.com",
+    project_token: "0xdemo5...zenith",
+    creator_wallet: "0xdemo5...creator5",
+    funding_amount: 75000,
+    backers_count: 89,
+    created_at: new Date(Date.now() - 86400000 * 14).toISOString(),
+    updated_at: new Date().toISOString(),
+    isDemo: true,
+  },
+];
 
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -52,13 +144,17 @@ export default function Home() {
 
         const data = await response.json();
 
-        if (data.success) {
-          setProjects(data.projects);
+        if (data.success && Array.isArray(data.projects)) {
+          // Merge real projects with demo projects
+          setProjects([...data.projects, ...DEMO_PROJECTS]);
         } else {
-          setError(data.error || "Failed to fetch projects");
+          // If API fails, still show demo projects
+          setProjects(DEMO_PROJECTS);
+          setError(null); // Don't show error if we have demo projects
         }
       } catch (err) {
-        setError("Failed to fetch projects");
+        // If API fails, still show demo projects
+        setProjects(DEMO_PROJECTS);
         console.error("Error fetching projects:", err);
       } finally {
         setLoading(false);
@@ -128,9 +224,9 @@ export default function Home() {
                   <>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {filteredProjects.map((project) => (
-                        <Link key={project.id} href={`/project/${project.id}`}>
+                        <Link key={project.id} href={project.isDemo ? "#" : `/project/${project.id}`}>
                         <MagicCard
-                          className="p-4 cursor-pointer rounded-2xl hover:scale-[1.02] transition-transform"
+                          className="p-4 cursor-pointer rounded-2xl hover:scale-[1.02] transition-transform relative"
                           gradientSize={200}
                           gradientFrom="#d4f6d3"
                           gradientTo="#0b1418"

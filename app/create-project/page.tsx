@@ -28,6 +28,7 @@ import {
   formatTokenBalance,
   type WalletToken,
 } from "@/lib/lilipadClient";
+import { shareToX, generateProjectShareText } from "@/lib/shareUtils";
 
 const poppins = Poppins({ weight: ["200", "300", "400", "700"], subsets: ["latin"] });
 
@@ -90,6 +91,8 @@ export default function CreateProject() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [createdProjectId, setCreatedProjectId] = useState<string | null>(null);
 
   // Token dropdown state
   const [walletTokens, setWalletTokens] = useState<WalletToken[]>([]);
@@ -173,6 +176,16 @@ export default function CreateProject() {
     }
   };
 
+  const handleShareToX = () => {
+    const shareOptions = generateProjectShareText(formData.name, createdProjectId || undefined);
+    shareToX(shareOptions);
+  };
+
+  const handleCloseSuccessModal = () => {
+    setShowSuccessModal(false);
+    router.push("/");
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -223,13 +236,16 @@ export default function CreateProject() {
         throw new Error(data.error || "Failed to create project");
       }
 
+      // Store the created project ID for sharing
+      if (data.data?.id) {
+        setCreatedProjectId(data.data.id);
+      }
+
       // Trigger confetti celebration
       triggerSideCannons();
 
-      // Wait a bit for the user to see the confetti before redirecting
-      setTimeout(() => {
-        router.push("/");
-      }, 2000);
+      // Show success modal with share option
+      setShowSuccessModal(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create project");
     } finally {
@@ -624,6 +640,43 @@ export default function CreateProject() {
                   </button>
                 </div>
               </form>
+
+              {/* Success Modal with Share to X option */}
+              {showSuccessModal && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+                  <MagicCard
+                    className="p-8 rounded-2xl max-w-md w-full text-center"
+                    gradientSize={200}
+                    gradientFrom="#d4f6d3"
+                    gradientTo="#0b1418"
+                  >
+                    <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-[#D4F6D3]/20 flex items-center justify-center">
+                      <Sparkles className="h-8 w-8 text-[#D4F6D3]" />
+                    </div>
+                    <h3 className="text-2xl font-light text-white mb-3">
+                      Project Published!
+                    </h3>
+                    <p className="text-gray-400 mb-8">
+                      Your project &quot;{formData.name}&quot; has been successfully created. Share it with the world!
+                    </p>
+                    <div className="space-y-3">
+                      <button
+                        onClick={handleShareToX}
+                        className="w-full py-3 px-6 bg-black text-white rounded-xl font-medium hover:bg-gray-900 transition-colors flex items-center justify-center gap-2 border border-gray-700"
+                      >
+                        <Twitter className="h-5 w-5" />
+                        Share on X
+                      </button>
+                      <button
+                        onClick={handleCloseSuccessModal}
+                        className="w-full py-3 px-6 bg-[#D4F6D3] text-[#0B1418] rounded-xl font-medium hover:bg-[#c2e8c1] transition-colors"
+                      >
+                        Continue to Dashboard
+                      </button>
+                    </div>
+                  </MagicCard>
+                </div>
+              )}
             </section>
           </main>
         </AppSidebar>

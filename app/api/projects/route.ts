@@ -14,13 +14,24 @@ export async function GET(request: NextRequest) {
     });
 
     const response = await fetch(url.toString());
+
+    // Check if response is JSON before parsing
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      console.error("Non-JSON response from worker:", await response.text());
+      return NextResponse.json(
+        { success: false, error: "Worker returned invalid response", projects: [] },
+        { status: 500 }
+      );
+    }
+
     const data = await response.json();
 
     return NextResponse.json(data, { status: response.status });
   } catch (error) {
     console.error("Error fetching projects:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to fetch projects" },
+      { success: false, error: "Failed to fetch projects", projects: [] },
       { status: 500 }
     );
   }
