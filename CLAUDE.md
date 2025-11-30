@@ -1,19 +1,3 @@
-<!--
- Copyright 2025 abhirupinspace
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     https://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
--->
-
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
@@ -34,7 +18,8 @@ npm run lint       # ESLint
 ### Worker (Cloudflare)
 ```bash
 cd worker
-npm run dev        # Local dev server on port 8787
+npm run dev        # Remote dev (connects to deployed D1)
+npm run dev:local  # Local dev with local D1
 npm run deploy     # Deploy to Cloudflare
 npm run db:init    # Initialize D1 database (remote)
 npm run db:init:local  # Initialize D1 database (local)
@@ -52,27 +37,45 @@ aptos move test
 ```
 ├── app/                    # Next.js App Router (pages, layouts, API routes)
 ├── components/             # React components (sidebar, navbar, ui/)
-├── lib/lilipadClient.ts    # Core SDK wrapper for Aptos blockchain calls (751 lines)
+├── lib/                    # Client libraries for external services
 ├── constants/              # Network config, module address, sidebar links
 ├── worker/                 # Cloudflare Workers API (D1 SQLite database)
-└── contract/sources/       # Move modules: launchpad, token, locking, vesting, escrow
+└── contract/sources/       # Move modules for on-chain logic
 ```
 
 ### Data Flow
-1. **Frontend** → User interacts with React components
-2. **API Proxy** → `/app/api/projects/route.ts` forwards to Cloudflare Worker
-3. **Worker** → CRUD operations on D1 database (projects storage)
-4. **Blockchain** → Direct calls via `lilipadClient.ts` using `@aptos-labs/ts-sdk`
+1. **Frontend** → User interacts with React components using `useWallet()` hook
+2. **API Proxy** → `app/api/projects/route.ts` forwards to Cloudflare Worker
+3. **Worker** → CRUD operations on D1 database (project metadata storage)
+4. **Blockchain** → Direct calls via client libraries using `@aptos-labs/ts-sdk`
 
-### Key Files
-- `lib/lilipadClient.ts` - All Aptos blockchain interactions (view calls, transactions, balance queries)
-- `worker/src/index.ts` - Worker routes: GET/POST `/api/projects`, GET `/api/projects/:id`
-- `contract/sources/` - 8 Move modules handling launchpad, tokens, locking, vesting, escrow
+### Key Client Libraries
+- `lib/lilipadClient.ts` - Core Aptos interactions: token operations, locking, vesting, launchpad sales
+- `lib/hyperionClient.ts` - Hyperion DEX integration: swaps, pools, liquidity positions
+- `lib/dexscreenerClient.ts` - Price/chart data from DexScreener
+
+### Move Contract Modules (contract/sources/)
+- `launchpad.move` - Token sales with escrow, soft caps, and automatic vesting
+- `token.move` - Fungible asset creation, minting, burning
+- `locking.move` - Time-locked token deposits (fungible + LP tokens)
+- `vesting.move` - Linear vesting streams with claimable releases
+- `escrow.move` - Holds tokens/APT during sales until conditions met
+- `events.move` - On-chain event emissions
+- `constants.move` - Shared error codes and precision values
+- `init.move` - Module initialization
+
+### Launchpad Sale Flow
+1. Owner creates sale via `create_sale()` with token, price, timing, soft cap
+2. Owner deposits tokens to escrow via `deposit_sale_tokens()` → `escrowed = true`
+3. Buyers purchase via `buy()` → APT escrowed, vesting stream created
+4. After sale ends, owner withdraws APT via `withdraw_proceeds()`
+5. Buyers claim vested tokens via `vesting::claim()`
 
 ## Tech Stack
 
 - **Frontend**: Next.js 16, React 19, Tailwind CSS v4, shadcn/ui (Radix)
-- **Blockchain**: Aptos Testnet, @aptos-labs/ts-sdk, wallet-adapter-react
+- **Blockchain**: Aptos (testnet default), @aptos-labs/ts-sdk, wallet-adapter-react
+- **DEX**: Hyperion SDK (@hyperionxyz/sdk)
 - **Backend**: Cloudflare Workers, D1 (SQLite)
 - **Contracts**: Move language
 
@@ -88,7 +91,9 @@ NEXT_PUBLIC_APTOS_API_KEY   # Optional Aptos RPC key
 ## Conventions
 
 - All interactive pages use `"use client"` directive
-- Components: PascalCase (`AppSidebar.tsx`), files: kebab-case (`app-sidebar.tsx`)
+- Components: PascalCase in code, files: kebab-case (`app-sidebar.tsx`)
 - API responses: `{ success: boolean, data/error }`
 - Wallet state via `useWallet()` hook from wallet adapter
-- State management: local useState, React Context for wallet only
+- Transaction payloads built via `build*Payload()` functions, executed with `signAndSubmitTransaction()`
+- BigInt used for all token amounts; use `parseTokenAmount()` / `formatTokenBalance()` for conversion
+- Price precision: `PRICE_PRECISION = 1e9` for launchpad pricing

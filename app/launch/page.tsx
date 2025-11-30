@@ -39,6 +39,7 @@ import {
   Zap,
   Shield,
   Timer,
+  Sparkles,
 } from "lucide-react";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { format } from "date-fns";
@@ -145,11 +146,11 @@ export default function Launch() {
   const [vestingDays, setVestingDays] = useState("30");
   const [isBuying, setIsBuying] = useState(false);
 
-  // Load data on mount
+  // Load data on mount and when account changes
   useEffect(() => {
     loadSales();
     loadProjects();
-  }, []);
+  }, [account?.address]);
 
   // Load wallet tokens when connected
   useEffect(() => {
@@ -300,7 +301,15 @@ export default function Launch() {
 
       // Load stored sales from localStorage for mapping
       const storedData = localStorage.getItem("lilipad_sales");
-      const stored: StoredSale[] = storedData ? JSON.parse(storedData) : [];
+      let stored: StoredSale[] = [];
+      if (storedData) {
+        try {
+          stored = JSON.parse(storedData);
+        } catch {
+          console.error("Invalid JSON in lilipad_sales, clearing storage");
+          localStorage.removeItem("lilipad_sales");
+        }
+      }
 
       // Try to load real sales from chain
       try {
@@ -332,82 +341,72 @@ export default function Launch() {
     }
   };
 
-  // Demo projects for testing Create Launch flow
-  const getDemoProjects = (): StoredProject[] => {
-    const demoOwner = account?.address?.toString() || "demo_owner";
-    return [
-      {
-        id: "demo_project_1",
-        name: "Luminos Finance",
-        category: "DeFi",
-        description: "Next-gen liquidity aggregator with cross-chain swaps and optimized routing.",
-        createdAt: Date.now() - 86400000 * 7,
-        owner: demoOwner,
-        websiteUrl: "https://luminos.fi",
-        githubUrl: "https://github.com/luminos-fi",
-      },
-      {
-        id: "demo_project_2",
-        name: "Wanderlost",
-        category: "Gaming",
-        description: "Open-world exploration RPG where players discover ancient ruins and mint unique artifacts.",
-        createdAt: Date.now() - 86400000 * 14,
-        owner: demoOwner,
-        websiteUrl: "https://wanderlost.gg",
-      },
-      {
-        id: "demo_project_3",
-        name: "Synapse AI",
-        category: "AI",
-        description: "Decentralized compute network for training and deploying machine learning models.",
-        createdAt: Date.now() - 86400000 * 3,
-        owner: demoOwner,
-        docsUrl: "https://docs.synapse-ai.xyz",
-      },
-      {
-        id: "demo_project_4",
-        name: "Echosphere",
-        category: "Social",
-        description: "Web3 social platform with token-gated communities and creator monetization tools.",
-        createdAt: Date.now() - 86400000 * 5,
-        owner: demoOwner,
-        xUrl: "https://x.com/echosphere_xyz",
-      },
-      {
-        id: "demo_project_5",
-        name: "Aethermint",
-        category: "NFT",
-        description: "Generative art platform where artists create collections using on-chain randomness.",
-        createdAt: Date.now() - 86400000 * 10,
-        owner: demoOwner,
-      },
-    ];
-  };
 
-  const loadProjects = () => {
+  const loadProjects = async () => {
     try {
       const allProjects: StoredProject[] = [];
+
+      // Only load projects if wallet is connected
+      if (!account?.address) {
+        setProjects([]);
+        return;
+      }
 
       // Load user's projects from localStorage
       const stored = localStorage.getItem("lilipad_projects");
       if (stored) {
-        const storedProjects: StoredProject[] = JSON.parse(stored);
-        if (account?.address) {
+        try {
+          const storedProjects: StoredProject[] = JSON.parse(stored);
           allProjects.push(...storedProjects.filter((p) => p.owner === account.address.toString()));
-        } else {
-          allProjects.push(...storedProjects);
+        } catch {
+          console.error("Invalid JSON in lilipad_projects, clearing storage");
+          localStorage.removeItem("lilipad_projects");
         }
       }
 
-      // Add demo projects for testing
-      const demoProjects = getDemoProjects();
-      allProjects.push(...demoProjects);
+      // Also fetch projects from API (created via /create-project)
+      try {
+        const response = await fetch("/api/projects");
+        if (response.ok) {
+          // Check if response is JSON before parsing
+          const contentType = response.headers.get("content-type");
+          if (!contentType || !contentType.includes("application/json")) {
+            console.error("Non-JSON response from API");
+            throw new Error("Invalid API response format");
+          }
+          const data = await response.json();
+          if (data.success && Array.isArray(data.data)) {
+            // Filter by current user's wallet
+            const apiProjects = data.data
+              .filter((p: { creator_wallet: string }) =>
+                p.creator_wallet === account.address.toString()
+              )
+              .map((p: { id: string; name: string; category: string; description: string; image_url?: string; github_url?: string; website_url?: string; docs_url?: string; x_url?: string; created_at: string; creator_wallet: string }) => ({
+                id: p.id,
+                name: p.name,
+                category: p.category,
+                description: p.description,
+                imageUrl: p.image_url,
+                githubUrl: p.github_url,
+                websiteUrl: p.website_url,
+                docsUrl: p.docs_url,
+                xUrl: p.x_url,
+                createdAt: new Date(p.created_at).getTime(),
+                owner: p.creator_wallet,
+              }));
+            // Avoid duplicates by checking IDs
+            const existingIds = new Set(allProjects.map(p => p.id));
+            allProjects.push(...apiProjects.filter((p: StoredProject) => !existingIds.has(p.id)));
+          }
+        }
+      } catch (apiError) {
+        console.error("Failed to fetch projects from API:", apiError);
+      }
 
       setProjects(allProjects);
     } catch (e) {
       console.error("Failed to load projects:", e);
-      // Still show demo projects even if localStorage fails
-      setProjects(getDemoProjects());
+      setProjects([]);
     }
   };
 
@@ -419,6 +418,35 @@ export default function Launch() {
     } catch (e) {
       console.error("Failed to load wallet tokens:", e);
     }
+  };
+
+  // Demo fill functions
+  const fillDemoSaleDetails = () => {
+    const now = new Date();
+    const startDate = new Date(now.getTime() + 24 * 60 * 60 * 1000); // Tomorrow
+    const endDate = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000); // 14 days from now
+
+    setSaleFormData(prev => ({
+      ...prev,
+      totalTokens: "1000000",
+      pricePerToken: "0.001",
+      startDate,
+      startTime: "12:00",
+      endDate,
+      endTime: "12:00",
+      softCap: "500",
+    }));
+  };
+
+  const fillDemoNewProject = () => {
+    const demoNames = ["AquaFi", "CryptoQuest", "DeFiHub", "TokenForge", "ChainVault"];
+    const demoCats = ["DeFi", "Gaming", "Infrastructure", "DAO", "NFT"];
+    const idx = Math.floor(Math.random() * demoNames.length);
+    setNewProjectData({
+      name: demoNames[idx],
+      category: demoCats[idx],
+      description: `${demoNames[idx]} is an innovative ${demoCats[idx].toLowerCase()} project built on Aptos.`,
+    });
   };
 
   // Selected token info
@@ -565,7 +593,15 @@ export default function Launch() {
       };
 
       const stored = localStorage.getItem("lilipad_sales");
-      const allSales: StoredSale[] = stored ? JSON.parse(stored) : [];
+      let allSales: StoredSale[] = [];
+      if (stored) {
+        try {
+          allSales = JSON.parse(stored);
+        } catch {
+          console.error("Invalid JSON in lilipad_sales, resetting");
+          localStorage.removeItem("lilipad_sales");
+        }
+      }
       allSales.push(storedSale);
       localStorage.setItem("lilipad_sales", JSON.stringify(allSales));
 
@@ -581,7 +617,15 @@ export default function Launch() {
         };
 
         const storedProjects = localStorage.getItem("lilipad_projects");
-        const allProjects: StoredProject[] = storedProjects ? JSON.parse(storedProjects) : [];
+        let allProjects: StoredProject[] = [];
+        if (storedProjects) {
+          try {
+            allProjects = JSON.parse(storedProjects);
+          } catch {
+            console.error("Invalid JSON in lilipad_projects, resetting");
+            localStorage.removeItem("lilipad_projects");
+          }
+        }
         allProjects.push(newProject);
         localStorage.setItem("lilipad_projects", JSON.stringify(allProjects));
       }
@@ -1305,39 +1349,49 @@ export default function Launch() {
               {/* Select Existing Project */}
               <MagicCard
                 className={`p-6 rounded-2xl cursor-pointer transition-all ${
-                  !useNewProject ? "border-[#D4F6D3]/50" : "border-[#D4F6D3]/10"
+                  !useNewProject && projects.length > 0 ? "border-[#D4F6D3]/50" : "border-[#D4F6D3]/10"
                 }`}
                 gradientSize={200}
                 gradientFrom="#d4f6d3"
                 gradientTo="#0b1418"
-                onClick={() => setUseNewProject(false)}
+                onClick={() => projects.length > 0 && setUseNewProject(false)}
               >
                 <h3 className="text-lg font-medium text-white mb-4">Existing Project</h3>
-                <Select
-                  value={selectedProjectId}
-                  onValueChange={setSelectedProjectId}
-                  disabled={useNewProject}
-                >
-                  <SelectTrigger className="w-full bg-[#0B1418] border-[#D4F6D3]/20 text-white">
-                    <SelectValue placeholder="Select a project" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#0B1418] border-[#D4F6D3]/20">
-                    {projects.length === 0 ? (
-                      <SelectItem value="none" disabled>
-                        No projects found
-                      </SelectItem>
-                    ) : (
-                      projects.map((project) => (
-                        <SelectItem key={project.id} value={project.id}>
-                          {project.name}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-gray-500 mt-3">
-                  Use a project you&apos;ve already created
-                </p>
+                {projects.length === 0 ? (
+                  <div className="text-center py-4">
+                    <p className="text-gray-400 text-sm mb-3">No projects found</p>
+                    <a
+                      href="/create-project"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-[#D4F6D3]/10 text-[#D4F6D3] rounded-lg text-sm hover:bg-[#D4F6D3]/20 transition-all"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Create a Project First
+                    </a>
+                  </div>
+                ) : (
+                  <>
+                    <Select
+                      value={selectedProjectId}
+                      onValueChange={setSelectedProjectId}
+                      disabled={useNewProject}
+                    >
+                      <SelectTrigger className="w-full bg-[#0B1418] border-[#D4F6D3]/20 text-white">
+                        <SelectValue placeholder="Select a project" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-[#0B1418] border-[#D4F6D3]/20">
+                        {projects.map((project) => (
+                          <SelectItem key={project.id} value={project.id}>
+                            {project.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-gray-500 mt-3">
+                      Use a project you&apos;ve already created
+                    </p>
+                  </>
+                )}
               </MagicCard>
 
               {/* Create New Project */}
@@ -1350,7 +1404,22 @@ export default function Launch() {
                 gradientTo="#0b1418"
                 onClick={() => setUseNewProject(true)}
               >
-                <h3 className="text-lg font-medium text-white mb-4">New Project</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-medium text-white">New Project</h3>
+                  {useNewProject && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        fillDemoNewProject();
+                      }}
+                      className="flex items-center gap-1.5 px-2 py-1 bg-[#0B1418] border border-[#D4F6D3]/30 text-[#D4F6D3] rounded-lg text-xs hover:bg-[#D4F6D3]/10 hover:border-[#D4F6D3]/50 transition-all"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      Demo
+                    </button>
+                  )}
+                </div>
                 <div className="space-y-3">
                   <input
                     type="text"
@@ -1476,7 +1545,20 @@ export default function Launch() {
         {/* Step 3: Sale Details */}
         {createStep === "details" && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-light text-white text-center">Sale Details</h2>
+            <div className="flex items-center justify-between">
+              <div className="flex-1" />
+              <h2 className="text-2xl font-light text-white text-center">Sale Details</h2>
+              <div className="flex-1 flex justify-end">
+                <button
+                  type="button"
+                  onClick={fillDemoSaleDetails}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-[#0B1418] border border-[#D4F6D3]/30 text-[#D4F6D3] rounded-lg text-sm hover:bg-[#D4F6D3]/10 hover:border-[#D4F6D3]/50 transition-all"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Demo Fill
+                </button>
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Total Tokens */}

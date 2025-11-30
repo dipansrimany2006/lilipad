@@ -32,6 +32,7 @@ import {
   Coins,
   ChevronRight,
   BarChart3,
+  Sparkles,
 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -250,6 +251,23 @@ export default function Vesting() {
     setSelectedToken(token);
     setFormData(prev => ({ ...prev, token: token.metadata, totalAmount: "" }));
     setShowTokenDropdown(false);
+  };
+
+  const fillDemoData = () => {
+    // Generate demo data with realistic values
+    const now = new Date();
+    const start = new Date(now.getTime() + 60 * 60 * 1000); // 1 hour from now
+    const end = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days from now
+
+    setStartDate(start);
+    setEndDate(end);
+    setFormData(prev => ({
+      ...prev,
+      beneficiary: account?.address?.toString() || "0x1234...5678",
+      totalAmount: selectedToken ? "1000" : prev.totalAmount,
+      startTime: format(start, "HH:mm"),
+      endTime: format(end, "HH:mm"),
+    }));
   };
 
   const copyToClipboard = async (text: string) => {
@@ -522,6 +540,18 @@ export default function Vesting() {
               {showForm ? (
                 /* Stream Creation Form */
                 <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* Demo Fill Button */}
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={fillDemoData}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-[#0B1418] border border-[#D4F6D3]/30 text-[#D4F6D3] rounded-lg text-sm hover:bg-[#D4F6D3]/10 hover:border-[#D4F6D3]/50 transition-all"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Demo Fill
+                    </button>
+                  </div>
+
                   {/* Beneficiary */}
                   <MagicCard
                     className="p-6 rounded-2xl"
