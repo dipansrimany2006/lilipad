@@ -93,17 +93,6 @@ interface StoredSale {
   owner: string;
 }
 
-// Categories for new projects
-const categories = [
-  "DeFi",
-  "NFT",
-  "DAO",
-  "Infrastructure",
-  "Gaming",
-  "Social",
-  "AI",
-  "Other",
-];
 
 export default function Launch() {
   const { account, signAndSubmitTransaction, connected } = useWallet();
@@ -114,20 +103,13 @@ export default function Launch() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [walletTokens, setWalletTokens] = useState<WalletToken[]>([]);
   const [projects, setProjects] = useState<StoredProject[]>([]);
-  
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
+
   // Form states
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [txResult, setTxResult] = useState<{ success: boolean; message: string } | null>(null);
   const [createStep, setCreateStep] = useState<"project" | "token" | "details" | "review">("project");
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
-  const [useNewProject, setUseNewProject] = useState(false);
-
-  // New project form data
-  const [newProjectData, setNewProjectData] = useState({
-    name: "",
-    category: "",
-    description: "",
-  });
 
   // Sale form data
   const [saleFormData, setSaleFormData] = useState({
@@ -343,28 +325,17 @@ export default function Launch() {
 
 
   const loadProjects = async () => {
+    setIsLoadingProjects(true);
     try {
-      const allProjects: StoredProject[] = [];
-
       // Only load projects if wallet is connected
       if (!account?.address) {
         setProjects([]);
         return;
       }
 
-      // Load user's projects from localStorage
-      const stored = localStorage.getItem("lilipad_projects");
-      if (stored) {
-        try {
-          const storedProjects: StoredProject[] = JSON.parse(stored);
-          allProjects.push(...storedProjects.filter((p) => p.owner === account.address.toString()));
-        } catch {
-          console.error("Invalid JSON in lilipad_projects, clearing storage");
-          localStorage.removeItem("lilipad_projects");
-        }
-      }
+      const walletAddress = account.address.toString();
 
-      // Also fetch projects from API (created via /create-project)
+      // Fetch projects from API (D1 database via Cloudflare Worker)
       try {
         const response = await fetch("/api/projects");
         if (response.ok) {
@@ -375,11 +346,15 @@ export default function Launch() {
             throw new Error("Invalid API response format");
           }
           const data = await response.json();
-          if (data.success && Array.isArray(data.data)) {
-            // Filter by current user's wallet
-            const apiProjects = data.data
+
+          // Handle both response formats: data.projects (home page format) or data.data
+          const projectsArray = data.projects || data.data || [];
+
+          if (data.success && Array.isArray(projectsArray)) {
+            // Filter by current user's wallet (creator_wallet matches connected wallet)
+            const userProjects = projectsArray
               .filter((p: { creator_wallet: string }) =>
-                p.creator_wallet === account.address.toString()
+                p.creator_wallet.toLowerCase() === walletAddress.toLowerCase()
               )
               .map((p: { id: string; name: string; category: string; description: string; image_url?: string; github_url?: string; website_url?: string; docs_url?: string; x_url?: string; created_at: string; creator_wallet: string }) => ({
                 id: p.id,
@@ -394,19 +369,25 @@ export default function Launch() {
                 createdAt: new Date(p.created_at).getTime(),
                 owner: p.creator_wallet,
               }));
-            // Avoid duplicates by checking IDs
-            const existingIds = new Set(allProjects.map(p => p.id));
-            allProjects.push(...apiProjects.filter((p: StoredProject) => !existingIds.has(p.id)));
+
+            setProjects(userProjects);
+          } else {
+            console.error("Invalid API response structure:", data);
+            setProjects([]);
           }
+        } else {
+          console.error("API request failed with status:", response.status);
+          setProjects([]);
         }
       } catch (apiError) {
         console.error("Failed to fetch projects from API:", apiError);
+        setProjects([]);
       }
-
-      setProjects(allProjects);
     } catch (e) {
       console.error("Failed to load projects:", e);
       setProjects([]);
+    } finally {
+      setIsLoadingProjects(false);
     }
   };
 
@@ -436,17 +417,6 @@ export default function Launch() {
       endTime: "12:00",
       softCap: "500",
     }));
-  };
-
-  const fillDemoNewProject = () => {
-    const demoNames = ["AquaFi", "CryptoQuest", "DeFiHub", "TokenForge", "ChainVault"];
-    const demoCats = ["DeFi", "Gaming", "Infrastructure", "DAO", "NFT"];
-    const idx = Math.floor(Math.random() * demoNames.length);
-    setNewProjectData({
-      name: demoNames[idx],
-      category: demoCats[idx],
-      description: `${demoNames[idx]} is an innovative ${demoCats[idx].toLowerCase()} project built on Aptos.`,
-    });
   };
 
   // Selected token info
@@ -583,8 +553,8 @@ export default function Launch() {
       // Store sale info
       const storedSale: StoredSale = {
         saleId: newSaleId,
-        projectName: useNewProject ? newProjectData.name : projects.find((p) => p.id === selectedProjectId)?.name || "Unknown",
-        projectId: useNewProject ? undefined : selectedProjectId,
+        projectName: projects.find((p) => p.id === selectedProjectId)?.name || "Unknown",
+        projectId: selectedProjectId,
         tokenSymbol: selectedToken.symbol,
         tokenMetadata: saleFormData.tokenMetadata,
         createdAt: Date.now(),
@@ -605,31 +575,6 @@ export default function Launch() {
       allSales.push(storedSale);
       localStorage.setItem("lilipad_sales", JSON.stringify(allSales));
 
-      // If new project, save it
-      if (useNewProject && newProjectData.name) {
-        const newProject: StoredProject = {
-          id: `project_${Date.now()}`,
-          name: newProjectData.name,
-          category: newProjectData.category,
-          description: newProjectData.description,
-          createdAt: Date.now(),
-          owner: account.address.toString(),
-        };
-
-        const storedProjects = localStorage.getItem("lilipad_projects");
-        let allProjects: StoredProject[] = [];
-        if (storedProjects) {
-          try {
-            allProjects = JSON.parse(storedProjects);
-          } catch {
-            console.error("Invalid JSON in lilipad_projects, resetting");
-            localStorage.removeItem("lilipad_projects");
-          }
-        }
-        allProjects.push(newProject);
-        localStorage.setItem("lilipad_projects", JSON.stringify(allProjects));
-      }
-
       setTxResult({
         success: true,
         message: `Fair Launch created successfully! Sale ID: ${newSaleId}`,
@@ -648,9 +593,7 @@ export default function Launch() {
         endTime: "12:00",
         softCap: "",
       });
-      setNewProjectData({ name: "", category: "", description: "" });
       setSelectedProjectId("");
-      setUseNewProject(false);
 
       // Reload sales
       await loadSales();
@@ -1343,123 +1286,82 @@ export default function Launch() {
         {/* Step 1: Project Selection */}
         {createStep === "project" && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-light text-white text-center">Select or Create Project</h2>
+            <h2 className="text-2xl font-light text-white text-center">Select Project</h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Select Existing Project */}
+            {/* Show loading state while fetching projects */}
+            {isLoadingProjects ? (
               <MagicCard
-                className={`p-6 rounded-2xl cursor-pointer transition-all ${
-                  !useNewProject && projects.length > 0 ? "border-[#D4F6D3]/50" : "border-[#D4F6D3]/10"
-                }`}
+                className="p-8 rounded-2xl text-center"
                 gradientSize={200}
                 gradientFrom="#d4f6d3"
                 gradientTo="#0b1418"
-                onClick={() => projects.length > 0 && setUseNewProject(false)}
               >
-                <h3 className="text-lg font-medium text-white mb-4">Existing Project</h3>
-                {projects.length === 0 ? (
-                  <div className="text-center py-4">
-                    <p className="text-gray-400 text-sm mb-3">No projects found</p>
-                    <a
-                      href="/create-project"
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-[#D4F6D3]/10 text-[#D4F6D3] rounded-lg text-sm hover:bg-[#D4F6D3]/20 transition-all"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Plus className="h-4 w-4" />
-                      Create a Project First
-                    </a>
-                  </div>
-                ) : (
-                  <>
-                    <Select
-                      value={selectedProjectId}
-                      onValueChange={setSelectedProjectId}
-                      disabled={useNewProject}
-                    >
-                      <SelectTrigger className="w-full bg-[#0B1418] border-[#D4F6D3]/20 text-white">
-                        <SelectValue placeholder="Select a project" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-[#0B1418] border-[#D4F6D3]/20">
-                        {projects.map((project) => (
-                          <SelectItem key={project.id} value={project.id}>
-                            {project.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-gray-500 mt-3">
-                      Use a project you&apos;ve already created
-                    </p>
-                  </>
-                )}
+                <Loader2 className="h-10 w-10 text-[#D4F6D3] animate-spin mx-auto mb-4" />
+                <p className="text-gray-400">Loading your projects...</p>
               </MagicCard>
-
-              {/* Create New Project */}
+            ) : projects.length > 0 ? (
+              /* Show dropdown if projects exist */
               <MagicCard
-                className={`p-6 rounded-2xl cursor-pointer transition-all ${
-                  useNewProject ? "border-[#D4F6D3]/50" : "border-[#D4F6D3]/10"
-                }`}
+                className="p-6 rounded-2xl"
                 gradientSize={200}
                 gradientFrom="#d4f6d3"
                 gradientTo="#0b1418"
-                onClick={() => setUseNewProject(true)}
               >
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-medium text-white">New Project</h3>
-                  {useNewProject && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        fillDemoNewProject();
-                      }}
-                      className="flex items-center gap-1.5 px-2 py-1 bg-[#0B1418] border border-[#D4F6D3]/30 text-[#D4F6D3] rounded-lg text-xs hover:bg-[#D4F6D3]/10 hover:border-[#D4F6D3]/50 transition-all"
-                    >
-                      <Sparkles className="h-3 w-3" />
-                      Demo
-                    </button>
-                  )}
-                </div>
-                <div className="space-y-3">
-                  <input
-                    type="text"
-                    value={newProjectData.name}
-                    onChange={(e) => setNewProjectData({ ...newProjectData, name: e.target.value })}
-                    placeholder="Project Name"
-                    disabled={!useNewProject}
-                    className="w-full px-4 py-2 bg-[#0B1418] border border-[#D4F6D3]/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-[#D4F6D3]/50 transition-all text-sm disabled:opacity-50"
-                  />
-                  <Select
-                    value={newProjectData.category}
-                    onValueChange={(v) => setNewProjectData({ ...newProjectData, category: v })}
-                    disabled={!useNewProject}
-                  >
-                    <SelectTrigger className="w-full bg-[#0B1418] border-[#D4F6D3]/20 text-white text-sm">
-                      <SelectValue placeholder="Category" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-[#0B1418] border-[#D4F6D3]/20">
-                      {categories.map((cat) => (
-                        <SelectItem key={cat} value={cat}>
-                          {cat}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <p className="text-xs text-gray-500 mt-3">Create a new project for this launch</p>
+                <h3 className="text-lg font-medium text-white mb-4">Select a Project</h3>
+                <Select
+                  value={selectedProjectId}
+                  onValueChange={setSelectedProjectId}
+                >
+                  <SelectTrigger className="w-full bg-[#0B1418] border-[#D4F6D3]/20 text-white">
+                    <SelectValue placeholder="Select a project" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#0B1418] border-[#D4F6D3]/20">
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500 mt-3">
+                  These are projects you&apos;ve created from your wallet
+                </p>
               </MagicCard>
-            </div>
-
-            <div className="flex justify-end">
-              <button
-                onClick={() => setCreateStep("token")}
-                disabled={(!useNewProject && !selectedProjectId) || (useNewProject && !newProjectData.name)}
-                className="px-8 py-3 bg-[#D4F6D3] text-[#0B1418] rounded-xl font-medium hover:bg-[#c2e8c1] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            ) : (
+              /* Show empty state if no projects */
+              <MagicCard
+                className="p-8 rounded-2xl text-center"
+                gradientSize={200}
+                gradientFrom="#d4f6d3"
+                gradientTo="#0b1418"
               >
-                Next
-                <ArrowRight className="h-4 w-4" />
-              </button>
-            </div>
+                <Rocket className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-white mb-2">No Projects Found</h3>
+                <p className="text-gray-400 text-sm mb-6">
+                  You need to create a project first before launching a token sale
+                </p>
+                <a
+                  href="/create-project"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-[#D4F6D3] text-[#0B1418] rounded-xl font-medium hover:bg-[#c2e8c1] transition-colors"
+                >
+                  <Plus className="h-5 w-5" />
+                  Create a Project First
+                </a>
+              </MagicCard>
+            )}
+
+            {projects.length > 0 && !isLoadingProjects && (
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setCreateStep("token")}
+                  disabled={!selectedProjectId}
+                  className="px-8 py-3 bg-[#D4F6D3] text-[#0B1418] rounded-xl font-medium hover:bg-[#c2e8c1] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  Next
+                  <ArrowRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -1738,9 +1640,7 @@ export default function Launch() {
                 <div>
                   <p className="text-xs text-gray-500 mb-1">Project</p>
                   <p className="text-white">
-                    {useNewProject
-                      ? newProjectData.name
-                      : projects.find((p) => p.id === selectedProjectId)?.name || "Unknown"}
+                    {projects.find((p) => p.id === selectedProjectId)?.name || "Unknown"}
                   </p>
                 </div>
                 <div>
