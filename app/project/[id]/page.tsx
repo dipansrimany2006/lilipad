@@ -219,7 +219,7 @@ export default function ProjectDetail() {
           <main className="flex-1 overflow-auto p-4">
             <SidebarTrigger className="mb-4" />
 
-            <div className="max-w-4xl mx-auto">
+            <div className="max-w-4xl mx-auto pb-24">
               {/* Back Button */}
               <button
                 onClick={() => router.back()}
