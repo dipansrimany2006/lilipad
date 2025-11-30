@@ -41,6 +41,15 @@ export default function Home() {
       try {
         setLoading(true);
         const response = await fetch("/api/projects");
+
+        // Check if response is JSON before parsing
+        const contentType = response.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+          console.error("Non-JSON response from API");
+          setError("Server error: Invalid response format");
+          return;
+        }
+
         const data = await response.json();
 
         if (data.success) {
@@ -185,48 +194,56 @@ export default function Home() {
                               {/* Social Links */}
                               <div className="flex items-center gap-1.5">
                                 {project.github_url && (
-                                  <a
-                                    href={project.github_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                  <button
+                                    type="button"
                                     className="p-1.5 bg-white/5 hover:bg-white/10 rounded transition-colors"
-                                    onClick={(e) => e.stopPropagation()}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      window.open(project.github_url, '_blank', 'noopener,noreferrer');
+                                    }}
                                   >
                                     <Github className="h-4 w-4 text-gray-300" />
-                                  </a>
+                                  </button>
                                 )}
                                 {project.website_url && (
-                                  <a
-                                    href={project.website_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                  <button
+                                    type="button"
                                     className="p-1.5 bg-white/5 hover:bg-white/10 rounded transition-colors"
-                                    onClick={(e) => e.stopPropagation()}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      window.open(project.website_url, '_blank', 'noopener,noreferrer');
+                                    }}
                                   >
                                     <Globe className="h-4 w-4 text-gray-300" />
-                                  </a>
+                                  </button>
                                 )}
                                 {project.docs_url && (
-                                  <a
-                                    href={project.docs_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                  <button
+                                    type="button"
                                     className="p-1.5 bg-white/5 hover:bg-white/10 rounded transition-colors"
-                                    onClick={(e) => e.stopPropagation()}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      window.open(project.docs_url, '_blank', 'noopener,noreferrer');
+                                    }}
                                   >
                                     <FileText className="h-4 w-4 text-gray-300" />
-                                  </a>
+                                  </button>
                                 )}
                                 {project.x_url && (
-                                  <a
-                                    href={project.x_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                  <button
+                                    type="button"
                                     className="p-1.5 bg-white/5 hover:bg-white/10 rounded transition-colors"
-                                    onClick={(e) => e.stopPropagation()}
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      window.open(project.x_url, '_blank', 'noopener,noreferrer');
+                                    }}
                                   >
                                     <ExternalLink className="h-4 w-4 text-gray-300" />
-                                  </a>
+                                  </button>
                                 )}
                                 <span className="flex items-center gap-1 ml-2 text-gray-500 text-xs">
                                   <Calendar className="h-3.5 w-3.5" />

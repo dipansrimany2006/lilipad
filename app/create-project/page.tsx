@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import Navbar from "@/components/navbar";
@@ -17,10 +17,17 @@ import {
   ArrowLeft,
   Coins,
   Plus,
-  Loader2
+  Loader2,
+  ChevronDown,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import { triggerSideCannons } from "@/components/side-canons";
+import {
+  getWalletFungibleAssets,
+  formatTokenBalance,
+  type WalletToken,
+} from "@/lib/lilipadClient";
 
 const poppins = Poppins({ weight: ["200", "300", "400", "700"], subsets: ["latin"] });
 
@@ -33,6 +40,37 @@ const categories = [
   "Social",
   "AI",
   "Other"
+];
+
+// Demo data for quick fill
+const demoProjects = [
+  {
+    name: "AptosSwap",
+    category: "DeFi",
+    description: "A next-generation decentralized exchange built on Aptos. AptosSwap offers lightning-fast swaps with minimal fees, concentrated liquidity pools, and advanced trading features for both retail and institutional users.",
+    githubUrl: "https://github.com/aptosswap/core",
+    websiteUrl: "https://aptosswap.io",
+    docsUrl: "https://docs.aptosswap.io",
+    xUrl: "https://x.com/aptosswap",
+  },
+  {
+    name: "NexusDAO",
+    category: "DAO",
+    description: "Decentralized governance platform enabling communities to create, manage, and vote on proposals with on-chain execution. Features quadratic voting, delegation, and multi-sig treasury management.",
+    githubUrl: "https://github.com/nexusdao/governance",
+    websiteUrl: "https://nexusdao.xyz",
+    docsUrl: "https://docs.nexusdao.xyz",
+    xUrl: "https://x.com/nexusdao",
+  },
+  {
+    name: "PixelVerse",
+    category: "Gaming",
+    description: "Play-to-earn metaverse game featuring unique NFT characters, land ownership, and an in-game economy. Build, explore, and compete in a fully decentralized virtual world.",
+    githubUrl: "https://github.com/pixelverse/game",
+    websiteUrl: "https://pixelverse.game",
+    docsUrl: "https://docs.pixelverse.game",
+    xUrl: "https://x.com/pixelversegame",
+  },
 ];
 
 export default function CreateProject() {
@@ -52,6 +90,71 @@ export default function CreateProject() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Token dropdown state
+  const [walletTokens, setWalletTokens] = useState<WalletToken[]>([]);
+  const [loadingTokens, setLoadingTokens] = useState(false);
+  const [showTokenDropdown, setShowTokenDropdown] = useState(false);
+  const [selectedToken, setSelectedToken] = useState<WalletToken | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowTokenDropdown(false);
+      }
+    };
+
+    if (showTokenDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showTokenDropdown]);
+
+  // Fetch wallet tokens when connected
+  useEffect(() => {
+    const fetchTokens = async () => {
+      if (connected && account?.address) {
+        setLoadingTokens(true);
+        try {
+          const tokens = await getWalletFungibleAssets(account.address.toString());
+          setWalletTokens(tokens);
+        } catch (error) {
+          console.error("Failed to fetch wallet tokens:", error);
+        } finally {
+          setLoadingTokens(false);
+        }
+      }
+    };
+
+    fetchTokens();
+  }, [connected, account?.address]);
+
+  const handleSelectToken = (token: WalletToken) => {
+    setSelectedToken(token);
+    setFormData(prev => ({ ...prev, projectToken: token.metadata }));
+    setShowTokenDropdown(false);
+  };
+
+  const fillDemoData = () => {
+    const demo = demoProjects[Math.floor(Math.random() * demoProjects.length)];
+    setFormData(prev => ({
+      ...prev,
+      name: demo.name,
+      category: demo.category,
+      description: demo.description,
+      githubUrl: demo.githubUrl,
+      websiteUrl: demo.websiteUrl,
+      docsUrl: demo.docsUrl,
+      xUrl: demo.xUrl,
+      // Keep projectToken if already selected
+      projectToken: prev.projectToken,
+    }));
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -79,6 +182,11 @@ export default function CreateProject() {
       return;
     }
 
+    if (!formData.projectToken) {
+      setError("Please select a token for your project");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -100,6 +208,14 @@ export default function CreateProject() {
           creatorWallet: account.address.toString(),
         }),
       });
+
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await response.text();
+        console.error("Non-JSON response from API:", text);
+        throw new Error("Server error: Invalid response format");
+      }
 
       const data = await response.json();
 
@@ -133,16 +249,26 @@ export default function CreateProject() {
 
             <section className="px-4 max-w-4xl mx-auto pb-24">
               {/* Header */}
-              <div className="flex items-center gap-4 mb-8">
-                <Link
-                  href="/"
-                  className="p-2 rounded-lg bg-[#0B1418] border border-[#D4F6D3]/20 text-gray-400 hover:text-white hover:border-[#D4F6D3]/50 transition-all"
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-4">
+                  <Link
+                    href="/"
+                    className="p-2 rounded-lg bg-[#0B1418] border border-[#D4F6D3]/20 text-gray-400 hover:text-white hover:border-[#D4F6D3]/50 transition-all"
+                  >
+                    <ArrowLeft className="h-5 w-5" />
+                  </Link>
+                  <h2 className="text-4xl font-light text-white">
+                    Create Project
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={fillDemoData}
+                  className="flex items-center gap-2 px-4 py-2 bg-[#0B1418] border border-[#D4F6D3]/30 text-[#D4F6D3] rounded-xl text-sm hover:bg-[#D4F6D3]/10 hover:border-[#D4F6D3]/50 transition-all"
                 >
-                  <ArrowLeft className="h-5 w-5" />
-                </Link>
-                <h2 className="text-4xl font-light text-white">
-                  Create Project
-                </h2>
+                  <Sparkles className="h-4 w-4" />
+                  Demo Fill
+                </button>
               </div>
 
               {/* Error Message */}
@@ -282,28 +408,121 @@ export default function CreateProject() {
                     Project Token *
                   </label>
                   <div className="flex items-center gap-4">
-                    <input
-                      type="text"
-                      name="projectToken"
-                      value={formData.projectToken}
-                      onChange={handleInputChange}
-                      placeholder="Enter token address (e.g., 0x...)"
-                      required
-                      className="flex-1 px-4 py-3 bg-[#0B1418] border border-[#D4F6D3]/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-[#D4F6D3]/50 transition-all"
-                    />
+                    {/* Token Selection Dropdown */}
+                    <div className="relative flex-1" ref={dropdownRef}>
+                      <button
+                        type="button"
+                        onClick={() => setShowTokenDropdown(!showTokenDropdown)}
+                        className="w-full px-4 py-3 bg-[#0B1418] border border-[#D4F6D3]/20 rounded-xl text-white focus:outline-none focus:border-[#D4F6D3]/50 transition-all flex items-center justify-between"
+                      >
+                        {loadingTokens ? (
+                          <span className="flex items-center gap-2 text-gray-400">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Loading tokens...
+                          </span>
+                        ) : selectedToken ? (
+                          <span className="flex items-center gap-3">
+                            {selectedToken.iconUri ? (
+                              <img
+                                src={selectedToken.iconUri}
+                                alt={selectedToken.symbol}
+                                className="w-8 h-8 rounded-full object-cover"
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                  (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                                }}
+                              />
+                            ) : null}
+                            <div className={`w-8 h-8 rounded-full bg-[#D4F6D3]/20 flex items-center justify-center ${selectedToken.iconUri ? 'hidden' : ''}`}>
+                              <Coins className="h-4 w-4 text-[#D4F6D3]" />
+                            </div>
+                            <div className="text-left">
+                              <p className="font-medium">{selectedToken.name}</p>
+                              <p className="text-xs text-gray-400">
+                                Balance: {formatTokenBalance(selectedToken.balance, selectedToken.decimals)} {selectedToken.symbol}
+                              </p>
+                            </div>
+                          </span>
+                        ) : (
+                          <span className="text-gray-500">Select a token from your wallet</span>
+                        )}
+                        <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${showTokenDropdown ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      {/* Dropdown Menu */}
+                      {showTokenDropdown && (
+                        <div className="absolute top-full left-0 right-0 mt-2 bg-[#0B1418] border border-[#D4F6D3]/20 rounded-xl shadow-2xl z-50 max-h-64 overflow-y-auto">
+                          {loadingTokens ? (
+                            <div className="p-4 text-center text-gray-400">
+                              <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />
+                              Loading tokens...
+                            </div>
+                          ) : walletTokens.length === 0 ? (
+                            <div className="p-4 text-center text-gray-400">
+                              <Coins className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                              <p>No tokens found in wallet</p>
+                              <p className="text-xs mt-1">Create a token first or connect a wallet with tokens</p>
+                            </div>
+                          ) : (
+                            walletTokens.map((token, index) => (
+                              <button
+                                key={token.metadata}
+                                type="button"
+                                onClick={() => handleSelectToken(token)}
+                                className={`w-full px-4 py-3 flex items-center gap-3 hover:bg-[#D4F6D3]/10 transition-colors text-left ${
+                                  index !== walletTokens.length - 1 ? 'border-b border-[#D4F6D3]/10' : ''
+                                } ${selectedToken?.metadata === token.metadata ? 'bg-[#D4F6D3]/5' : ''}`}
+                              >
+                                {token.iconUri ? (
+                                  <img
+                                    src={token.iconUri}
+                                    alt={token.symbol}
+                                    className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).style.display = 'none';
+                                      (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                                    }}
+                                  />
+                                ) : null}
+                                <div className={`w-10 h-10 rounded-full bg-[#D4F6D3]/20 flex items-center justify-center flex-shrink-0 ${token.iconUri ? 'hidden' : ''}`}>
+                                  <Coins className="h-5 w-5 text-[#D4F6D3]" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium text-white truncate">{token.name}</p>
+                                  <p className="text-xs text-gray-400">{token.symbol}</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-sm text-white font-medium">
+                                    {formatTokenBalance(token.balance, token.decimals)}
+                                  </p>
+                                  <p className="text-xs text-gray-500">{token.symbol}</p>
+                                </div>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
                     <Link href="/tokens" className="flex">
-                    <button
-                      type="button"
-                      className="flex items-center gap-2 px-6 py-3 bg-[#0B1418] border border-[#D4F6D3]/40 text-[#D4F6D3] rounded-xl font-medium hover:bg-[#D4F6D3]/10 hover:border-[#D4F6D3] transition-all"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Create Token
-                    </button>
+                      <button
+                        type="button"
+                        className="flex items-center gap-2 px-6 py-3 bg-[#0B1418] border border-[#D4F6D3]/40 text-[#D4F6D3] rounded-xl font-medium hover:bg-[#D4F6D3]/10 hover:border-[#D4F6D3] transition-all"
+                      >
+                        <Plus className="h-4 w-4" />
+                        Create Token
+                      </button>
                     </Link>
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    Enter your existing token address or create a new token for your project
-                  </p>
+                  {selectedToken && (
+                    <p className="text-xs text-gray-500 mt-2 font-mono truncate">
+                      {selectedToken.metadata}
+                    </p>
+                  )}
+                  {!selectedToken && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      Select a token from your wallet or create a new one
+                    </p>
+                  )}
                 </MagicCard>
 
                 {/* URLs Section */}

@@ -12,6 +12,7 @@ import {
   Loader2,
   ExternalLink,
   ArrowDown,
+  ArrowUp,
   TrendingUp,
   Wallet,
   Info,
@@ -51,6 +52,8 @@ export default function VaultPage() {
   const [aptBalance, setAptBalance] = useState<string>("0");
   const [stAptBalance, setStAptBalance] = useState<string>("0");
   const [stakeAmount, setStakeAmount] = useState("");
+  const [unstakeAmount, setUnstakeAmount] = useState("");
+  const [activeTab, setActiveTab] = useState<"stake" | "unstake">("stake");
   const [loadingBalances, setLoadingBalances] = useState(false);
   const [selectedNetwork, setSelectedNetwork] = useState<VaultNetwork>(
     WALLET_NETWORK === "mainnet" ? "mainnet" : "testnet"
@@ -145,11 +148,11 @@ export default function VaultPage() {
       const walletAptos = WALLET_NETWORK === "mainnet" ? mainnetAptos : testnetAptos;
 
       // Amnis stake function - deposits APT and mints stAPT
-      // deposit_and_stake_entry takes: (signer, amount: u64, referrer: address)
+      // deposit_and_stake_entry takes: (amount: u64, referrer: address)
       const payload = {
         function: `${walletAmnisAddr.module}::router::deposit_and_stake_entry` as `${string}::${string}::${string}`,
         typeArguments: [],
-        functionArguments: [amountInOctas.toString(), account.address.toString()],
+        functionArguments: [amountInOctas, account.address.toString()],
       };
 
       const response = await signAndSubmitTransaction({ data: payload });
@@ -170,6 +173,66 @@ export default function VaultPage() {
       setTxResult({
         success: false,
         message: error instanceof Error ? error.message : "Failed to stake APT",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUnstake = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!connected || !account) {
+      setTxResult({ success: false, message: "Please connect your wallet first" });
+      return;
+    }
+
+    if (!unstakeAmount || parseFloat(unstakeAmount) <= 0) {
+      setTxResult({ success: false, message: "Please enter a valid amount" });
+      return;
+    }
+
+    if (parseFloat(unstakeAmount) > parseFloat(stAptBalance)) {
+      setTxResult({ success: false, message: "Insufficient stAPT balance" });
+      return;
+    }
+
+    setIsSubmitting(true);
+    setTxResult(null);
+
+    try {
+      const amountInOctas = Math.floor(parseFloat(unstakeAmount) * 1e8);
+
+      // Use the wallet's network addresses for the transaction
+      const walletAmnisAddr = AMNIS_ADDRESSES[WALLET_NETWORK === "mainnet" ? "mainnet" : "testnet"];
+      const walletAptos = WALLET_NETWORK === "mainnet" ? mainnetAptos : testnetAptos;
+
+      // Amnis unstake function - burns stAPT and returns APT
+      // unstake_entry takes: (amount: u64, recipient: address)
+      const payload = {
+        function: `${walletAmnisAddr.module}::router::unstake_entry` as `${string}::${string}::${string}`,
+        typeArguments: [],
+        functionArguments: [amountInOctas, account.address.toString()],
+      };
+
+      const response = await signAndSubmitTransaction({ data: payload });
+      await walletAptos.waitForTransaction({ transactionHash: response.hash });
+
+      setTxResult({
+        success: true,
+        message: `Successfully unstaked ${unstakeAmount} stAPT on ${WALLET_NETWORK}! View transaction: https://explorer.aptoslabs.com/txn/${response.hash}?network=${WALLET_NETWORK}`,
+      });
+      setUnstakeAmount("");
+
+      // Refresh balances
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (error: unknown) {
+      console.error("Unstake error:", error);
+      setTxResult({
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to unstake stAPT",
       });
     } finally {
       setIsSubmitting(false);
@@ -326,99 +389,205 @@ export default function VaultPage() {
                     </MagicCard>
                   </div>
 
-                  {/* Stake Form */}
+                  {/* Stake/Unstake Form */}
                   <MagicCard
                     className="p-6 rounded-2xl"
                     gradientSize={300}
                     gradientFrom="#d4f6d3"
                     gradientTo="#0b1418"
                   >
-                    <h2 className="text-xl font-medium text-white mb-6 flex items-center gap-2">
-                      <ArrowDown className="h-5 w-5 text-[#D4F6D3]" />
-                      Stake APT
-                    </h2>
+                    {/* Tab Selector */}
+                    <div className="flex items-center gap-2 p-1 bg-[#0B1418] border border-[#D4F6D3]/20 rounded-xl mb-6">
+                      <button
+                        onClick={() => setActiveTab("stake")}
+                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                          activeTab === "stake"
+                            ? "bg-[#D4F6D3] text-[#0B1418]"
+                            : "text-gray-400 hover:text-white"
+                        }`}
+                      >
+                        <ArrowDown className="h-4 w-4" />
+                        Stake
+                      </button>
+                      <button
+                        onClick={() => setActiveTab("unstake")}
+                        className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+                          activeTab === "unstake"
+                            ? "bg-[#D4F6D3] text-[#0B1418]"
+                            : "text-gray-400 hover:text-white"
+                        }`}
+                      >
+                        <ArrowUp className="h-4 w-4" />
+                        Unstake
+                      </button>
+                    </div>
 
-                    <form onSubmit={handleStake} className="space-y-6">
-                      {/* Amount Input */}
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <label className="text-sm font-medium text-gray-400">
-                            Amount to Stake
-                          </label>
-                          <span className="text-xs text-gray-500">
-                            Available: {aptBalance} APT
-                          </span>
-                        </div>
-                        <div className="relative">
-                          <input
-                            type="number"
-                            step="0.0001"
-                            min="0"
-                            value={stakeAmount}
-                            onChange={(e) => setStakeAmount(e.target.value)}
-                            placeholder="0.00"
-                            className="w-full px-4 py-4 pr-32 bg-[#0B1418] border border-[#D4F6D3]/20 rounded-xl text-white text-xl placeholder-gray-500 focus:outline-none focus:border-[#D4F6D3]/50 transition-all"
-                          />
-                          <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setStakeAmount(aptBalance)}
-                              className="px-3 py-1 bg-[#D4F6D3]/20 text-[#D4F6D3] rounded-lg text-xs font-medium hover:bg-[#D4F6D3]/30 transition-colors"
-                            >
-                              MAX
-                            </button>
-                            <div className="flex items-center gap-1.5">
-                              <Image
-                                src="/image/amAPT.png"
-                                alt="APT"
-                                width={20}
-                                height={20}
-                                className="rounded-full"
-                              />
-                              <span className="text-gray-400 font-medium">APT</span>
+                    {activeTab === "stake" ? (
+                      <form onSubmit={handleStake} className="space-y-6">
+                        {/* Amount Input */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="text-sm font-medium text-gray-400">
+                              Amount to Stake
+                            </label>
+                            <span className="text-xs text-gray-500">
+                              Available: {aptBalance} APT
+                            </span>
+                          </div>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="0.0001"
+                              min="0"
+                              value={stakeAmount}
+                              onChange={(e) => setStakeAmount(e.target.value)}
+                              placeholder="0.00"
+                              className="w-full px-4 py-4 pr-32 bg-[#0B1418] border border-[#D4F6D3]/20 rounded-xl text-white text-xl placeholder-gray-500 focus:outline-none focus:border-[#D4F6D3]/50 transition-all"
+                            />
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setStakeAmount(aptBalance)}
+                                className="px-3 py-1 bg-[#D4F6D3]/20 text-[#D4F6D3] rounded-lg text-xs font-medium hover:bg-[#D4F6D3]/30 transition-colors"
+                              >
+                                MAX
+                              </button>
+                              <div className="flex items-center gap-1.5">
+                                <Image
+                                  src="/image/amAPT.png"
+                                  alt="APT"
+                                  width={20}
+                                  height={20}
+                                  className="rounded-full"
+                                />
+                                <span className="text-gray-400 font-medium">APT</span>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
 
-                      {/* Info Box */}
-                      <div className="p-4 bg-[#D4F6D3]/5 border border-[#D4F6D3]/20 rounded-xl">
-                        <div className="flex items-start gap-3">
-                          <Info className="h-5 w-5 text-[#D4F6D3] flex-shrink-0 mt-0.5" />
-                          <div className="text-sm text-gray-400">
-                            <p className="mb-2 flex items-center gap-2">
-                              Stake APT to receive
-                              <span className="inline-flex items-center gap-1">
-                                <Image src="/image/stAPT.png" alt="stAPT" width={16} height={16} className="rounded-full" />
-                                <span className="text-white font-medium">stAPT</span>
-                              </span>, a liquid staking token that earns staking rewards automatically.
-                            </p>
-                            <p>
-                              stAPT can be used in DeFi while your APT earns rewards.
-                            </p>
+                        {/* Info Box */}
+                        <div className="p-4 bg-[#D4F6D3]/5 border border-[#D4F6D3]/20 rounded-xl">
+                          <div className="flex items-start gap-3">
+                            <Info className="h-5 w-5 text-[#D4F6D3] flex-shrink-0 mt-0.5" />
+                            <div className="text-sm text-gray-400">
+                              <p className="mb-2 flex items-center gap-2">
+                                Stake APT to receive
+                                <span className="inline-flex items-center gap-1">
+                                  <Image src="/image/stAPT.png" alt="stAPT" width={16} height={16} className="rounded-full" />
+                                  <span className="text-white font-medium">stAPT</span>
+                                </span>, a liquid staking token that earns staking rewards automatically.
+                              </p>
+                              <p>
+                                stAPT can be used in DeFi while your APT earns rewards.
+                              </p>
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      {/* Submit Button */}
-                      <button
-                        type="submit"
-                        disabled={isSubmitting || !stakeAmount || parseFloat(stakeAmount) <= 0}
-                        className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-[#D4F6D3] text-[#0B1418] rounded-xl font-semibold hover:bg-[#c2e8c1] transition-colors text-lg disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#D4F6D3]/20"
-                      >
-                        {isSubmitting ? (
-                          <>
-                            <Loader2 className="h-6 w-6 animate-spin" />
-                            Staking...
-                          </>
-                        ) : (
-                          <>
-                            <Vault className="h-6 w-6" />
-                            Stake APT
-                          </>
-                        )}
-                      </button>
-                    </form>
+                        {/* Submit Button */}
+                        <button
+                          type="submit"
+                          disabled={isSubmitting || !stakeAmount || parseFloat(stakeAmount) <= 0}
+                          className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-[#D4F6D3] text-[#0B1418] rounded-xl font-semibold hover:bg-[#c2e8c1] transition-colors text-lg disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#D4F6D3]/20"
+                        >
+                          {isSubmitting ? (
+                            <>
+                              <Loader2 className="h-6 w-6 animate-spin" />
+                              Staking...
+                            </>
+                          ) : (
+                            <>
+                              <Vault className="h-6 w-6" />
+                              Stake APT
+                            </>
+                          )}
+                        </button>
+                      </form>
+                    ) : (
+                      <form onSubmit={handleUnstake} className="space-y-6">
+                        {/* Amount Input */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="text-sm font-medium text-gray-400">
+                              Amount to Unstake
+                            </label>
+                            <span className="text-xs text-gray-500">
+                              Available: {stAptBalance} stAPT
+                            </span>
+                          </div>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              step="0.0001"
+                              min="0"
+                              value={unstakeAmount}
+                              onChange={(e) => setUnstakeAmount(e.target.value)}
+                              placeholder="0.00"
+                              className="w-full px-4 py-4 pr-32 bg-[#0B1418] border border-[#D4F6D3]/20 rounded-xl text-white text-xl placeholder-gray-500 focus:outline-none focus:border-[#D4F6D3]/50 transition-all"
+                            />
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setUnstakeAmount(stAptBalance)}
+                                className="px-3 py-1 bg-[#D4F6D3]/20 text-[#D4F6D3] rounded-lg text-xs font-medium hover:bg-[#D4F6D3]/30 transition-colors"
+                              >
+                                MAX
+                              </button>
+                              <div className="flex items-center gap-1.5">
+                                <Image
+                                  src="/image/stAPT.png"
+                                  alt="stAPT"
+                                  width={20}
+                                  height={20}
+                                  className="rounded-full"
+                                />
+                                <span className="text-gray-400 font-medium">stAPT</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Info Box */}
+                        <div className="p-4 bg-[#D4F6D3]/5 border border-[#D4F6D3]/20 rounded-xl">
+                          <div className="flex items-start gap-3">
+                            <Info className="h-5 w-5 text-[#D4F6D3] flex-shrink-0 mt-0.5" />
+                            <div className="text-sm text-gray-400">
+                              <p className="mb-2 flex items-center gap-2">
+                                Unstake your
+                                <span className="inline-flex items-center gap-1">
+                                  <Image src="/image/stAPT.png" alt="stAPT" width={16} height={16} className="rounded-full" />
+                                  <span className="text-white font-medium">stAPT</span>
+                                </span>
+                                to receive APT back.
+                              </p>
+                              <p>
+                                Unstaking may take some time to process depending on the protocol.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Submit Button */}
+                        <button
+                          type="submit"
+                          disabled={isSubmitting || !unstakeAmount || parseFloat(unstakeAmount) <= 0}
+                          className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-[#D4F6D3] text-[#0B1418] rounded-xl font-semibold hover:bg-[#c2e8c1] transition-colors text-lg disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#D4F6D3]/20"
+                        >
+                          {isSubmitting ? (
+                            <>
+                              <Loader2 className="h-6 w-6 animate-spin" />
+                              Unstaking...
+                            </>
+                          ) : (
+                            <>
+                              <ArrowUp className="h-6 w-6" />
+                              Unstake stAPT
+                            </>
+                          )}
+                        </button>
+                      </form>
+                    )}
                   </MagicCard>
 
                   {/* Amnis Info */}

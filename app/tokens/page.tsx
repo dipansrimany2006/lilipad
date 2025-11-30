@@ -20,6 +20,7 @@ import {
   TrendingUp,
   Clock,
   Database,
+  Sparkles,
 } from "lucide-react";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import {
@@ -124,6 +125,26 @@ export default function Tokens() {
     setTimeout(() => setCopiedAddress(null), 2000);
   };
 
+  const fillDemoData = () => {
+    const demoTokens = [
+      { name: "LiquidityToken", symbol: "LQT", supply: "1000000000" },
+      { name: "GovernanceToken", symbol: "GOV", supply: "100000000" },
+      { name: "RewardToken", symbol: "RWD", supply: "500000000" },
+      { name: "UtilityToken", symbol: "UTL", supply: "2000000000" },
+    ];
+    const demo = demoTokens[Math.floor(Math.random() * demoTokens.length)];
+
+    setFormData(prev => ({
+      ...prev,
+      name: demo.name,
+      symbol: demo.symbol,
+      decimals: "8",
+      initialSupply: demo.supply,
+      maxSupply: (BigInt(demo.supply) * BigInt(10)).toString(),
+      projectUri: "https://example.com",
+    }));
+  };
+
   // Analytics data for token creation
   const analytics = useMemo(() => {
     const totalTokensCreated = tokens.length;
@@ -206,9 +227,25 @@ export default function Tokens() {
 
       const payload = buildCreateTokenPayload(params);
 
-      const response = await signAndSubmitTransaction({
-        data: payload,
-      });
+      let response;
+      try {
+        response = await signAndSubmitTransaction({
+          data: payload,
+        });
+      } catch (walletError: unknown) {
+        // Handle wallet-specific errors (user rejection, wallet errors, etc.)
+        console.error("Wallet error:", walletError);
+        const errorMsg = walletError instanceof Error ? walletError.message : String(walletError);
+        // Check for common wallet rejection patterns
+        if (errorMsg.includes("rejected") || errorMsg.includes("cancelled") || errorMsg.includes("canceled")) {
+          throw new Error("Transaction was rejected by user");
+        }
+        throw new Error(`Wallet error: ${errorMsg.slice(0, 100)}`);
+      }
+
+      if (!response || !response.hash) {
+        throw new Error("No transaction hash received from wallet");
+      }
 
       // Wait for transaction
       await aptos.waitForTransaction({
@@ -231,7 +268,15 @@ export default function Tokens() {
 
       // Store token in localStorage
       const stored = localStorage.getItem("lilipad_created_tokens");
-      const allTokens: StoredToken[] = stored ? JSON.parse(stored) : [];
+      let allTokens: StoredToken[] = [];
+      if (stored) {
+        try {
+          allTokens = JSON.parse(stored);
+        } catch {
+          console.error("Invalid JSON in lilipad_created_tokens, resetting storage");
+          localStorage.removeItem("lilipad_created_tokens");
+        }
+      }
       allTokens.unshift(newToken);
       localStorage.setItem("lilipad_created_tokens", JSON.stringify(allTokens));
 
@@ -428,6 +473,18 @@ export default function Tokens() {
               {showForm ? (
                 /* Token Creation Form */
                 <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* Demo Fill Button */}
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={fillDemoData}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-[#0B1418] border border-[#D4F6D3]/30 text-[#D4F6D3] rounded-lg text-sm hover:bg-[#D4F6D3]/10 hover:border-[#D4F6D3]/50 transition-all"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Demo Fill
+                    </button>
+                  </div>
+
                   {/* Token Name & Symbol Row */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Token Name */}

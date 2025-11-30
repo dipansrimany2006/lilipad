@@ -25,6 +25,7 @@ import {
   Coins,
   ChevronRight,
   BarChart3,
+  Sparkles,
 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -151,6 +152,19 @@ export default function Locks() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const fillDemoData = () => {
+    // Generate demo data with realistic values
+    const now = new Date();
+    const unlock = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000); // 90 days from now
+
+    setUnlockDate(unlock);
+    setFormData(prev => ({
+      ...prev,
+      amount: selectedToken ? "5000" : prev.amount,
+      unlockTime: "12:00",
+    }));
   };
 
   const copyToClipboard = async (text: string) => {
@@ -409,6 +423,18 @@ export default function Locks() {
               {showForm ? (
                 /* Lock Creation Form */
                 <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* Demo Fill Button */}
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={fillDemoData}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-[#0B1418] border border-[#D4F6D3]/30 text-[#D4F6D3] rounded-lg text-sm hover:bg-[#D4F6D3]/10 hover:border-[#D4F6D3]/50 transition-all"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Demo Fill
+                    </button>
+                  </div>
+
                   {/* Token Selection Dropdown */}
                   <MagicCard
                     className="p-6 rounded-2xl"

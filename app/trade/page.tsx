@@ -28,7 +28,9 @@ import {
   buildSwapPayload,
   COMMON_TOKENS,
   formatPriceImpact,
-} from "@/lib/hyperionClient";
+  type DexProvider,
+  DEX_PROVIDERS,
+} from "@/lib/dexClient";
 import {
   getWalletFungibleAssets,
   formatTokenBalance,
@@ -42,7 +44,7 @@ import {
   formatUsdPrice,
   type PairData,
 } from "@/lib/dexscreenerClient";
-import { NETWORK } from "@/constants";
+import { NETWORK, DEFAULT_DEX_PROVIDER, DEX_PROVIDER_INFO } from "@/constants";
 
 const poppins = Poppins({ weight: ["200", "300", "400", "700"], subsets: ["latin"] });
 
@@ -102,6 +104,9 @@ export default function Trade() {
   // Settings
   const [slippage, setSlippage] = useState(0.5);
   const [showTokenSelector, setShowTokenSelector] = useState<"from" | "to" | null>(null);
+  const [dexProvider, setDexProvider] = useState<DexProvider>(DEFAULT_DEX_PROVIDER);
+  const [showDexSelector, setShowDexSelector] = useState(false);
+  const [curveType, setCurveType] = useState<"uncorrelated" | "stable">("uncorrelated");
 
   // Loading
   const [loadingBalances, setLoadingBalances] = useState(false);
@@ -216,7 +221,9 @@ export default function Trade() {
       const estimate = await estimateSwapOutput(
         tokenFrom.address,
         tokenTo.address,
-        inputAmount
+        inputAmount,
+        dexProvider,
+        curveType
       );
 
       if (estimate) {
@@ -225,17 +232,19 @@ export default function Trade() {
         setSwapRoute(estimate.route);
         setPriceImpact(estimate.priceImpact);
       } else {
-        setError("No liquidity pool found for this pair");
+        const networkNote = NETWORK === "testnet" ? " (testnet has limited liquidity)" : "";
+        setError(`No liquidity pool found on ${DEX_PROVIDER_INFO[dexProvider].name}${networkNote}`);
         setAmountTo("");
       }
     } catch (err) {
       console.error("Estimation error:", err);
-      setError("Failed to estimate swap. Pool may not exist.");
+      const networkNote = NETWORK === "testnet" ? " Testnet has limited DEX pools." : "";
+      setError(`Failed to estimate swap.${networkNote}`);
       setAmountTo("");
     } finally {
       setIsEstimating(false);
     }
-  }, [amountFrom, tokenFrom, tokenTo]);
+  }, [amountFrom, tokenFrom, tokenTo, dexProvider, curveType]);
 
   // Debounced estimation
   useEffect(() => {
@@ -275,16 +284,15 @@ export default function Trade() {
 
     try {
       const inputAmount = parseFloat(amountFrom) * Math.pow(10, tokenFrom.decimals);
-      const outputAmount = parseFloat(amountTo) * Math.pow(10, tokenTo.decimals);
 
       const payload = await buildSwapPayload({
-        currencyA: tokenFrom.address,
-        currencyB: tokenTo.address,
-        currencyAAmount: inputAmount,
-        currencyBAmount: outputAmount,
-        slippage: slippage / 100,
-        poolRoute: swapRoute,
+        tokenFrom: tokenFrom.address,
+        tokenTo: tokenTo.address,
+        amountIn: inputAmount,
+        slippage: slippage,
         recipient: account.address.toString(),
+        provider: dexProvider,
+        curveType: curveType,
       });
 
       const response = await signAndSubmitTransaction({
@@ -294,7 +302,7 @@ export default function Trade() {
       setTxResult({
         success: true,
         hash: response.hash,
-        message: `Successfully swapped ${amountFrom} ${tokenFrom.symbol} for ${amountTo} ${tokenTo.symbol}`,
+        message: `Successfully swapped ${amountFrom} ${tokenFrom.symbol} for ${amountTo} ${tokenTo.symbol} via ${DEX_PROVIDER_INFO[dexProvider].name}`,
       });
 
       // Reset form
@@ -461,9 +469,51 @@ export default function Trade() {
                 <div className={`flex flex-col gap-4 ${showChart ? "w-[600px] flex-shrink-0" : "w-full max-w-md"}`}>
                   {/* Swap Card */}
                   <MagicCard className="p-4 rounded-2xl" gradientSize={200} gradientFrom="#d4f6d3" gradientTo="#0b1418">
-                    {/* Header with Slippage */}
+                    {/* Header with DEX Selector and Slippage */}
                     <div className="flex items-center justify-between mb-3">
-                      <h2 className="text-lg font-medium text-white">Swap</h2>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-lg font-medium text-white">Swap</h2>
+                        {/* DEX Provider Selector */}
+                        <div className="relative">
+                          <button
+                            onClick={() => setShowDexSelector(!showDexSelector)}
+                            className="flex items-center gap-1.5 px-2 py-1 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+                          >
+                            <img src={DEX_PROVIDER_INFO[dexProvider].icon} alt={DEX_PROVIDER_INFO[dexProvider].name} className="w-4 h-4 rounded-full object-cover" />
+                            <span className="text-white text-xs font-medium">{DEX_PROVIDER_INFO[dexProvider].name}</span>
+                            <ChevronDown className={`h-3 w-3 text-gray-400 transition-transform ${showDexSelector ? "rotate-180" : ""}`} />
+                          </button>
+                          {showDexSelector && (
+                            <div className="absolute top-full left-0 mt-1 w-48 bg-[#0B1418] border border-white/10 rounded-xl shadow-xl z-20 overflow-hidden">
+                              {(Object.keys(DEX_PROVIDER_INFO) as DexProvider[]).map((provider) => (
+                                <button
+                                  key={provider}
+                                  onClick={() => {
+                                    setDexProvider(provider);
+                                    setShowDexSelector(false);
+                                    setAmountTo("");
+                                    setSwapRoute([]);
+                                  }}
+                                  className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${
+                                    dexProvider === provider
+                                      ? "bg-[#D4F6D3]/20 text-white"
+                                      : "hover:bg-white/5 text-gray-300"
+                                  }`}
+                                >
+                                  <img src={DEX_PROVIDER_INFO[provider].icon} alt={DEX_PROVIDER_INFO[provider].name} className="w-6 h-6 rounded-full object-cover" />
+                                  <div className="flex-1">
+                                    <div className="text-sm font-medium">{DEX_PROVIDER_INFO[provider].name}</div>
+                                    <div className="text-[10px] text-gray-500">{DEX_PROVIDER_INFO[provider].description}</div>
+                                  </div>
+                                  {dexProvider === provider && (
+                                    <div className="w-1.5 h-1.5 rounded-full bg-[#D4F6D3]" />
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                       <div className="flex items-center gap-1">
                         <span className="text-gray-400 text-xs">Slippage:</span>
                         {[0.5, 1.0].map((value) => (
@@ -490,6 +540,58 @@ export default function Trade() {
                         />
                       </div>
                     </div>
+
+                    {/* Testnet Warning */}
+                    {NETWORK === "testnet" && (
+                      <div className="flex items-center gap-2 mb-3 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                        <AlertCircle className="h-4 w-4 text-yellow-400 flex-shrink-0" />
+                        <span className="text-yellow-400 text-xs">
+                          Testnet has limited DEX liquidity. Some token pairs may not have pools. Use mainnet for full functionality.
+                        </span>
+                      </div>
+                    )}
+
+                    {/* LiquidSwap Curve Type Selector */}
+                    {dexProvider === "liquidswap" && (
+                      <div className="flex items-center gap-2 mb-3 p-2 bg-white/5 rounded-lg">
+                        <span className="text-gray-400 text-xs">Pool Type:</span>
+                        <button
+                          onClick={() => {
+                            setCurveType("uncorrelated");
+                            setAmountTo("");
+                            setSwapRoute([]);
+                          }}
+                          className={`px-2 py-1 rounded text-xs transition-colors ${
+                            curveType === "uncorrelated"
+                              ? "bg-[#D4F6D3] text-[#0B1418]"
+                              : "bg-white/10 text-white hover:bg-white/20"
+                          }`}
+                        >
+                          Uncorrelated
+                        </button>
+                        <button
+                          onClick={() => {
+                            setCurveType("stable");
+                            setAmountTo("");
+                            setSwapRoute([]);
+                          }}
+                          className={`px-2 py-1 rounded text-xs transition-colors ${
+                            curveType === "stable"
+                              ? "bg-[#D4F6D3] text-[#0B1418]"
+                              : "bg-white/10 text-white hover:bg-white/20"
+                          }`}
+                        >
+                          Stable
+                        </button>
+                        <div className="group relative ml-1">
+                          <Info className="h-3 w-3 text-gray-500 cursor-help" />
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-[#0B1418] border border-white/10 rounded-lg text-[10px] text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-30">
+                            <p><strong>Uncorrelated:</strong> For volatile pairs (e.g., APT/USDC)</p>
+                            <p className="mt-1"><strong>Stable:</strong> For stable pairs (e.g., USDC/USDT)</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {/* From Token */}
                     <div className="bg-white/5 rounded-xl p-3 mb-2">
@@ -676,7 +778,11 @@ export default function Trade() {
                     </button>
 
                     {/* Info footer */}
-                    <p className="text-[10px] text-gray-500 text-center mt-2">Powered by Hyperion DEX • Chart by DexScreener</p>
+                    <div className="flex items-center justify-center gap-1 mt-2">
+                      <span className="text-[10px] text-gray-500">Powered by</span>
+                      <img src={DEX_PROVIDER_INFO[dexProvider].icon} alt={DEX_PROVIDER_INFO[dexProvider].name} className="w-3 h-3 rounded-full" />
+                      <span className="text-[10px] text-gray-500">{DEX_PROVIDER_INFO[dexProvider].name} • Chart by DexScreener</span>
+                    </div>
                   </MagicCard>
 
                   {/* Popular Pairs Section */}
