@@ -284,6 +284,7 @@ export default function CreateProject() {
                       required
                       className="flex-1 px-4 py-3 bg-[#0B1418] border border-[#D4F6D3]/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-[#D4F6D3]/50 transition-all"
                     />
+                    <Link href="/tokens" className="flex">
                     <button
                       type="button"
                       className="flex items-center gap-2 px-6 py-3 bg-[#0B1418] border border-[#D4F6D3]/40 text-[#D4F6D3] rounded-xl font-medium hover:bg-[#D4F6D3]/10 hover:border-[#D4F6D3] transition-all"
@@ -291,6 +292,7 @@ export default function CreateProject() {
                       <Plus className="h-4 w-4" />
                       Create Token
                     </button>
+                    </Link>
                   </div>
                   <p className="text-xs text-gray-500 mt-2">
                     Enter your existing token address or create a new token for your project
