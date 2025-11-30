@@ -298,7 +298,7 @@ export default function Tokens() {
           <main className="flex-1 overflow-auto p-4">
             <SidebarTrigger className="mb-4" />
 
-            <section className="px-4 max-w-4xl mx-auto pb-8">
+            <section className="px-4 max-w-4xl mx-auto pb-24">
               {/* Header */}
               <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">

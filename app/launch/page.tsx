@@ -1770,7 +1770,7 @@ export default function Launch() {
           <main className="flex-1 overflow-auto p-4">
             <SidebarTrigger className="mb-4" />
 
-            <section className="px-4 max-w-6xl mx-auto pb-8">
+            <section className="px-4 max-w-6xl mx-auto pb-24">
               {/* Header */}
               {!selectedSale && !showCreateForm && (
                 <div className="flex items-center justify-between mb-8">
